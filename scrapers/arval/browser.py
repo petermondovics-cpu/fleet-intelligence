@@ -1,3 +1,5 @@
+from scrapers.arval.offers import get_offer_links
+
 from playwright.sync_api import sync_playwright
 
 from scrapers.arval.cookies import accept_cookies
@@ -20,7 +22,14 @@ def open_arval():
         print(f"Cookie accepted: {accepted}")
 
         print("⏸ Opening Playwright Inspector...")
-        page.pause()
+        links = get_offer_links(page)
+
+        print()
+
+        for link in links[:5]:
+            print(link)
+
+input("Press ENTER to close the browser...")
 
         print("✅ Page ready")
 

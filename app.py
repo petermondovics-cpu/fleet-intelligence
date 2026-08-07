@@ -1,10 +1,9 @@
-from scrapers.arval.browser import open_arval
+from scrapers.manager import ScraperManager
 
 
 def main():
-    print("🚀 Fleet Intelligence")
-
-    open_arval()
+    manager = ScraperManager()
+    manager.run()
 
 
 if __name__ == "__main__":

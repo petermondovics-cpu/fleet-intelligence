@@ -1,30 +1,23 @@
 from playwright.sync_api import Page
 
 
-def get_offer_cards(page: Page):
+def get_offer_links(page: Page) -> list[str]:
     """
-    Returns all visible vehicle offer cards.
+    Visszaadja az összes Arval ajánlat linkjét.
     """
 
-    selectors = [
-        ".vehicle-card",
-        ".offer-card",
-        ".card",
-        "[data-testid='vehicle-card']",
-    ]
+    offers = page.locator("a.is-result-list")
 
-    for selector in selectors:
-        cards = page.locator(selector)
+    count = offers.count()
 
-        try:
-            count = cards.count()
+    print(f"📦 Found {count} offers")
 
-            if count > 0:
-                print(f"✅ Found {count} cards using '{selector}'")
-                return cards
+    links = []
 
-        except Exception:
-            pass
+    for i in range(count):
+        href = offers.nth(i).get_attribute("href")
 
-    print("❌ No offer cards found")
-    return None
+        if href:
+            links.append("https://www.arval.hu" + href)
+
+    return links
