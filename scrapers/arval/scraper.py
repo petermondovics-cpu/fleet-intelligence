@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright
 
 from models.offer import Offer
 from scrapers.arval.cookies import accept_cookies
+from scrapers.arval.parser import ArvalParser
 
 ARVAL_URL = "https://www.arval.hu/kis-es-kozepvallalkozasok/ajanlat-hosszu-tavu-igenyekre"
 
@@ -68,7 +69,16 @@ class ArvalScraper:
 
                 page.wait_for_timeout(2000)
 
-                page.pause()
+                parser = ArvalParser()
+
+                title = parser.parse_title(page)
+
+                print()
+                print("=" * 60)
+                print(f"Title: {title}")
+                print("=" * 60)
+
+                #page.pause()
 
             browser.close()
 
