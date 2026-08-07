@@ -21,7 +21,7 @@ class ArvalScraper:
             page.goto(
                 ARVAL_URL,
                 wait_until="domcontentloaded",
-                timeout=60000
+                timeout=60000,
             )
 
             accept_cookies(page)
@@ -53,6 +53,22 @@ class ArvalScraper:
                             url="https://www.arval.hu" + href,
                         )
                     )
+
+            if offers:
+
+                print()
+                print("Opening first offer...")
+                print(offers[0].url)
+
+                page.goto(
+                    offers[0].url,
+                    wait_until="domcontentloaded",
+                    timeout=60000,
+                )
+
+                page.wait_for_timeout(2000)
+
+                page.pause()
 
             browser.close()
 
