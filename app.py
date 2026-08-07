@@ -1,10 +1,11 @@
-from loguru import logger
+from scrapers.arval.browser import open_arval
 
-from database.database import engine
 
-logger.info("Fleet Intelligence Platform")
+def main():
+    print("🚀 Fleet Intelligence")
 
-with engine.connect():
-    logger.success("Database connected")
+    open_arval()
 
-logger.success("Ready.")
+
+if __name__ == "__main__":
+    main()
