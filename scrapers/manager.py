@@ -1,4 +1,6 @@
+from exporters.json_exporter import JsonExporter
 from scrapers.arval.scraper import ArvalScraper
+from exporters.excel_exporter import ExcelExporter
 
 
 class ScraperManager:
@@ -9,9 +11,14 @@ class ScraperManager:
 
         offers = scraper.collect()
 
-        print()
+        print(f"\nCollected {len(offers)} offers")
 
-        print(f"Collected {len(offers)} offers")
+        JsonExporter().export(
+            offers,
+            "arval.json",
+        )
 
-        for offer in offers[:5]:
-            print(offer.url)
+        ExcelExporter().export(
+            offers,
+            "arval.xlsx",
+        )

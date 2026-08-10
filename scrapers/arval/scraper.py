@@ -23,13 +23,21 @@ class ArvalScraper:
 
             offers = []
 
-            # Egyelőre csak az első ajánlatot dolgozzuk fel
-            for url in urls[:1]:
+            for url in urls:
 
-                offer = self.collect_offer(page, url)
+                try:
 
-                if offer:
-                    offers.append(offer)
+                    offer = self.collect_offer(page, url)
+
+                    if offer:
+                        offers.append(offer)
+
+                except Exception as e:
+
+                    print(f"❌ Failed: {url}")
+                    print(e)
+
+                    continue
 
             browser.close()
 
@@ -74,30 +82,31 @@ class ArvalScraper:
 
         page.wait_for_timeout(1500)
 
-        page.pause()
+        # Hibakereséshez használd, utána kommenteld ki
+        # page.pause()
 
         parser = ArvalParser()
 
         title = parser.parse_title(page)
         monthly_fee = parser.parse_monthly_fee(page)
-
-        print(f"Title: {title}")
-        print(f"Monthly fee: {monthly_fee:,} Ft") 
-
         duration = parser.parse_duration(page)
+        mileage = parser.parse_mileage(page)
+        fuel_type = parser.parse_fuel_type(page)
 
         print(f"Title: {title}")
-        print(f"Monthly fee: {monthly_fee} Ft")
-        print(f"Duration: {duration} months")  
+        print(f"Monthly fee: {monthly_fee:,} Ft")
+        print(f"Duration: {duration} months")
+        print(f"Mileage: {mileage:,} km/year")
+        print(f"Fuel: {fuel_type}")
 
         return Offer(
             provider="Arval",
             brand="",
             model="",
             trim=title,
-            fuel_type="",
-            monthly_fee=0,
-            duration=0,
-            mileage=0,
+            fuel_type=fuel_type,
+            monthly_fee=monthly_fee,
+            duration=duration,
+            mileage=mileage,
             url=url,
         )
