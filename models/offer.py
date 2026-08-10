@@ -12,6 +12,3 @@ class Offer:
     duration: int
     mileage: int
     url: str
-
-    scraped_at: datetime
-    source: str

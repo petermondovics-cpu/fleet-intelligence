@@ -1,6 +1,6 @@
+from exporters.excel_exporter import ExcelExporter
 from exporters.json_exporter import JsonExporter
 from scrapers.arval.scraper import ArvalScraper
-from exporters.excel_exporter import ExcelExporter
 
 
 class ScraperManager:

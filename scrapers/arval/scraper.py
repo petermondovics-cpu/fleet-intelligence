@@ -5,6 +5,7 @@ from playwright.sync_api import sync_playwright, Page
 from models.offer import Offer
 from scrapers.arval.cookies import accept_cookies
 from scrapers.arval.parser import ArvalParser
+from normalizers.vehicle_normalizer import VehicleNormalizer
 
 ARVAL_URL = "https://www.arval.hu/kis-es-kozepvallalkozasok/ajanlat-hosszu-tavu-igenyekre"
 
@@ -86,12 +87,14 @@ class ArvalScraper:
         # page.pause()
 
         parser = ArvalParser()
+        normalizer = VehicleNormalizer()
 
         title = parser.parse_title(page)
         monthly_fee = parser.parse_monthly_fee(page)
         duration = parser.parse_duration(page)
         mileage = parser.parse_mileage(page)
         fuel_type = parser.parse_fuel_type(page)
+        vehicle = normalizer.normalize(title)
 
         print(f"Title: {title}")
         print(f"Monthly fee: {monthly_fee:,} Ft")
@@ -101,8 +104,8 @@ class ArvalScraper:
 
         return Offer(
             provider="Arval",
-            brand="",
-            model="",
+            brand=vehicle["brand"],
+            model=vehicle["model"],
             trim=title,
             fuel_type=fuel_type,
             monthly_fee=monthly_fee,

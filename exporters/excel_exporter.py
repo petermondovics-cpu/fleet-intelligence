@@ -1,31 +1,32 @@
-from openpyxl import Workbook
-from models.offer import Offer
 from pathlib import Path
+
+from openpyxl import Workbook
+
+from models.offer import Offer
 
 
 class ExcelExporter:
 
     def export(self, offers: list[Offer], filename: str):
 
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Offers"
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Offers"
 
-        ws.append([
+        worksheet.append([
             "Provider",
             "Brand",
             "Model",
             "Trim",
             "Fuel",
-            "Monthly fee",
+            "Monthly Fee",
             "Duration",
             "Mileage",
             "URL",
         ])
 
         for offer in offers:
-
-            ws.append([
+            worksheet.append([
                 offer.provider,
                 offer.brand,
                 offer.model,
@@ -39,6 +40,7 @@ class ExcelExporter:
 
         Path("output").mkdir(exist_ok=True)
 
-        wb.save(f"output/{filename}")
+        filepath = Path("output") / filename
+        workbook.save(filepath)
 
-        print(f"✅ Excel exported: output/{filename}")
+        print(f"✅ Excel exported to {filepath}")
