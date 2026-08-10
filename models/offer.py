@@ -1,14 +1,32 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
-@dataclass
+from models.provider import Provider
+from models.vehicle import Vehicle
+
+
+@dataclass(slots=True)
 class Offer:
-    provider: str
-    brand: str
-    model: str
-    trim: str
-    fuel_type: str
+    """
+    Leasing offer for a specific vehicle from a specific provider.
+    """
+
+    provider: Provider
+
+    vehicle: Vehicle
+
     monthly_fee: int
+
     duration: int
+
     mileage: int
-    url: str
+
+    deposit: int = 0
+
+    availability: str = ""
+
+    url: str = ""
+
+    source: str = ""
+
+    scraped_at: datetime = field(default_factory=datetime.utcnow)
