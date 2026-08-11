@@ -1,30 +1,65 @@
-from playwright.sync_api import sync_playwright, Page
+from typing import Optional
 
+from playwright.sync_api import Page, sync_playwright
+
+from core.scraper_plugin import ScraperPlugin
+from models.offer import Offer
 from scrapers.ayvens.parser import AyvensParser
+
 
 AYVENS_URL = "https://autotartosberlet.ayvens.com/"
 
 
-class AyvensScraper:
+class AyvensScraper(ScraperPlugin):
 
-    def collect(self):
+    name = "ayvens"
+
+    def collect(self) -> list[Offer]:
 
         with sync_playwright() as p:
 
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(
+                headless=False
+            )
 
             page = browser.new_page()
 
             urls = self.collect_offer_urls(page)
 
-            if urls:
-                self.collect_offer(page, urls[0])
+            offers = []
+
+            for url in urls:
+
+                try:
+
+                    offer = self.collect_offer(
+                        page,
+                        url,
+                    )
+
+                    if offer:
+                        offers.append(offer)
+
+                except Exception as e:
+
+                    print(f"❌ Failed: {url}")
+                    print(e)
+
+                    continue
 
             browser.close()
 
-            return urls
+            print(
+                f"\nAyvens collected "
+                f"{len(offers)} offers"
+            )
 
-    def collect_offer_urls(self, page: Page) -> list[str]:
+            return offers
+
+    def collect_offer_urls(
+        self,
+        page: Page,
+    ) -> list[str]:
 
         page.goto(
             AYVENS_URL,
@@ -43,18 +78,31 @@ class AyvensScraper:
 
         for i in range(cards.count()):
 
-            href = cards.nth(i).get_attribute("href")
+            href = cards.nth(i).get_attribute(
+                "href"
+            )
 
             if href:
-                urls.append(
-                    "https://autotartosberlet.ayvens.com" + href
-                )
 
-        print(f"Found {len(urls)} offers")
+                if href.startswith("http"):
+                    urls.append(href)
+                else:
+                    urls.append(
+                        "https://autotartosberlet.ayvens.com"
+                        + href
+                    )
+
+        print(
+            f"Found {len(urls)} Ayvens offers"
+        )
 
         return urls
 
-    def collect_offer(self, page: Page, url: str):
+    def collect_offer(
+        self,
+        page: Page,
+        url: str,
+    ) -> Optional[Offer]:
 
         print(f"\nOpening: {url}")
 
@@ -67,6 +115,7 @@ class AyvensScraper:
         page.wait_for_timeout(2000)
 
         parser = AyvensParser()
+
         title = parser.parse_title(page)
         model = parser.parse_model(page)
         monthly_fee = parser.parse_monthly_fee(page)
@@ -76,7 +125,28 @@ class AyvensScraper:
 
         print(f"Title: {title}")
         print(f"Model: {model}")
-        print(f"Monthly fee: {monthly_fee:,} Ft")
-        print(f"Duration: {duration} months")
-        print(f"Mileage: {mileage:,} km/year")
+        print(
+            f"Monthly fee: "
+            f"{monthly_fee:,} Ft"
+        )
+        print(
+            f"Duration: "
+            f"{duration} months"
+        )
+        print(
+            f"Mileage: "
+            f"{mileage:,} km/year"
+        )
         print(f"Fuel: {fuel_type}")
+
+        return Offer(
+            provider="Ayvens",
+            brand="",
+            model=title,
+            trim=model,
+            fuel_type=fuel_type,
+            monthly_fee=monthly_fee,
+            duration=duration,
+            mileage=mileage,
+            url=url,
+        )
