@@ -67,30 +67,47 @@ class AyvensScraper(ScraperPlugin):
             timeout=60000,
         )
 
-        page.wait_for_timeout(3000)
+        # Az Ayvens oldal JavaScriptből építi fel
+        # az ajánlati kártyákat, ezért várunk a DOM-ra.
+        page.wait_for_timeout(5000)
 
-        cards = (
-            page.locator("div.card-container")
-            .locator("xpath=ancestor::a[1]")
+        cards = page.locator(
+            "div.card-container"
+        )
+
+        print(
+            f"Detected card containers: "
+            f"{cards.count()}"
         )
 
         urls = []
 
         for i in range(cards.count()):
 
-            href = cards.nth(i).get_attribute(
-                "href"
+            card = cards.nth(i)
+
+            link = card.locator(
+                "xpath=ancestor::a[1]"
             )
 
-            if href:
+            if link.count() == 0:
+                continue
 
-                if href.startswith("http"):
-                    urls.append(href)
-                else:
-                    urls.append(
-                        "https://autotartosberlet.ayvens.com"
-                        + href
-                    )
+            href = link.get_attribute("href")
+
+            if not href:
+                continue
+
+            if href.startswith("http"):
+                full_url = href
+            else:
+                full_url = (
+                    "https://autotartosberlet.ayvens.com"
+                    + href
+                )
+
+            if full_url not in urls:
+                urls.append(full_url)
 
         print(
             f"Found {len(urls)} Ayvens offers"

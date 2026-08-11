@@ -142,8 +142,8 @@ class ArvalScraper(ScraperPlugin):
         return Offer(
             provider="Arval",
             brand="",
-            model="",
-            trim=title,
+            model=title,
+            trim="",
             fuel_type=fuel_type,
             monthly_fee=monthly_fee,
             duration=duration,

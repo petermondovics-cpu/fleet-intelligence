@@ -1,19 +1,26 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-
-from models.provider import Provider
-from models.vehicle import Vehicle
+from typing import Optional
 
 
-@dataclass(slots=True)
+@dataclass
 class Offer:
     """
-    Leasing offer for a specific vehicle from a specific provider.
+    Leasing offer collected from a provider.
+
+    This is the current V1-compatible offer model.
+    The domain model will be further normalized in a later sprint.
     """
 
-    provider: Provider
+    provider: str
 
-    vehicle: Vehicle
+    brand: str
+
+    model: str
+
+    trim: str
+
+    fuel_type: str
 
     monthly_fee: int
 
@@ -21,12 +28,10 @@ class Offer:
 
     mileage: int
 
-    deposit: int = 0
+    url: str
 
-    availability: str = ""
+    scraped_at: datetime = None
 
-    url: str = ""
+    source: Optional[str] = None
 
-    source: str = ""
-
-    scraped_at: datetime = field(default_factory=datetime.utcnow)
+    raw_title: Optional[str] = None
