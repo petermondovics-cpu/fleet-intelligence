@@ -1,22 +1,31 @@
 from typing import Optional
 
-from playwright.sync_api import sync_playwright, Page
+from playwright.sync_api import Page, sync_playwright
 
+from core.scraper_plugin import ScraperPlugin
 from models.offer import Offer
 from scrapers.arval.cookies import accept_cookies
 from scrapers.arval.parser import ArvalParser
-from normalizers.vehicle_normalizer import VehicleNormalizer
-
-ARVAL_URL = "https://www.arval.hu/kis-es-kozepvallalkozasok/ajanlat-hosszu-tavu-igenyekre"
 
 
-class ArvalScraper:
+ARVAL_URL = (
+    "https://www.arval.hu/"
+    "kis-es-kozepvallalkozasok/"
+    "ajanlat-hosszu-tavu-igenyekre"
+)
+
+
+class ArvalScraper(ScraperPlugin):
+
+    name = "arval"
 
     def collect(self) -> list[Offer]:
 
         with sync_playwright() as p:
 
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(
+                headless=False
+            )
 
             page = browser.new_page()
 
@@ -28,7 +37,10 @@ class ArvalScraper:
 
                 try:
 
-                    offer = self.collect_offer(page, url)
+                    offer = self.collect_offer(
+                        page,
+                        url,
+                    )
 
                     if offer:
                         offers.append(offer)
@@ -42,9 +54,17 @@ class ArvalScraper:
 
             browser.close()
 
+            print(
+                f"\nArval collected "
+                f"{len(offers)} offers"
+            )
+
             return offers
 
-    def collect_offer_urls(self, page: Page) -> list[str]:
+    def collect_offer_urls(
+        self,
+        page: Page,
+    ) -> list[str]:
 
         page.goto(
             ARVAL_URL,
@@ -56,22 +76,35 @@ class ArvalScraper:
 
         page.wait_for_timeout(2000)
 
-        cards = page.locator("a.is-result-list")
+        cards = page.locator(
+            "a.is-result-list"
+        )
 
         urls = []
 
         for i in range(cards.count()):
 
-            href = cards.nth(i).get_attribute("href")
+            href = cards.nth(i).get_attribute(
+                "href"
+            )
 
             if href:
-                urls.append("https://www.arval.hu" + href)
 
-        print(f"Found {len(urls)} offers")
+                urls.append(
+                    "https://www.arval.hu" + href
+                )
+
+        print(
+            f"Found {len(urls)} Arval offers"
+        )
 
         return urls
 
-    def collect_offer(self, page: Page, url: str) -> Optional[Offer]:
+    def collect_offer(
+        self,
+        page: Page,
+        url: str,
+    ) -> Optional[Offer]:
 
         print(f"\nOpening: {url}")
 
@@ -83,29 +116,33 @@ class ArvalScraper:
 
         page.wait_for_timeout(1500)
 
-        # Hibakereséshez használd, utána kommenteld ki
-        # page.pause()
-
         parser = ArvalParser()
-        normalizer = VehicleNormalizer()
 
         title = parser.parse_title(page)
         monthly_fee = parser.parse_monthly_fee(page)
         duration = parser.parse_duration(page)
         mileage = parser.parse_mileage(page)
         fuel_type = parser.parse_fuel_type(page)
-        vehicle = normalizer.normalize(title)
 
         print(f"Title: {title}")
-        print(f"Monthly fee: {monthly_fee:,} Ft")
-        print(f"Duration: {duration} months")
-        print(f"Mileage: {mileage:,} km/year")
+        print(
+            f"Monthly fee: "
+            f"{monthly_fee:,} Ft"
+        )
+        print(
+            f"Duration: "
+            f"{duration} months"
+        )
+        print(
+            f"Mileage: "
+            f"{mileage:,} km/year"
+        )
         print(f"Fuel: {fuel_type}")
 
         return Offer(
             provider="Arval",
-            brand=vehicle["brand"],
-            model=vehicle["model"],
+            brand="",
+            model="",
             trim=title,
             fuel_type=fuel_type,
             monthly_fee=monthly_fee,
