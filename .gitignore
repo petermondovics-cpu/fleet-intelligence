@@ -1,8 +1,14 @@
 .venv/
+.venv312/
+
 __pycache__/
 *.py[cod]
+
 .vscode/
+
 logs/
 output/
+
 .env
+
 .DS_Store
