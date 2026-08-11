@@ -22,27 +22,22 @@ def main():
     offers = fleet.collect()
 
     print(
-        f"\nTotal FleetIQ offers: "
+        f"\nTotal offers: "
         f"{len(offers)}"
     )
 
-    print("\nOffers by provider:")
-
-    providers = {}
+    print(
+        "\nNormalized offers:"
+    )
 
     for offer in offers:
 
-        providers.setdefault(
-            offer.provider,
-            0
-        )
-
-        providers[offer.provider] += 1
-
-    for provider, count in providers.items():
-
         print(
-            f"{provider}: {count}"
+            f"{offer.provider:10} | "
+            f"{offer.brand:12} | "
+            f"{offer.model:20} | "
+            f"{offer.fuel_type:8} | "
+            f"{offer.monthly_fee:,} Ft"
         )
 
 

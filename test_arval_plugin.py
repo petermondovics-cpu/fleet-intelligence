@@ -6,12 +6,24 @@ def main():
 
     fleet = FleetIQ()
 
-    arval = ArvalScraper()
+    fleet.register(
+        ArvalScraper()
+    )
 
-    fleet.register(arval)
+    print(
+        "\nRegistered plugins:"
+    )
 
-    print("Registered plugins:")
-    print(fleet.plugins())
+    print(
+        fleet.plugins()
+    )
+
+    offers = fleet.collect()
+
+    print(
+        f"\nCollected offers: "
+        f"{len(offers)}"
+    )
 
 
 if __name__ == "__main__":
