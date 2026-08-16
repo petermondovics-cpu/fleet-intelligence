@@ -1,0 +1,211 @@
+from dataclasses import asdict, dataclass
+from statistics import mean
+from typing import Dict, Optional, Tuple
+
+from market_intelligence.benchmark_read_repository import BenchmarkReadRepository
+
+
+@dataclass(frozen=True)
+class BenchmarkDecisionDashboardDataV2:
+    run: Optional[dict]
+    results: Tuple[dict, ...]
+    pair_count: int
+    evaluated_count: int
+    failed_count: int
+    price_comparable_count: int
+    blocked_count: int
+    blocker_counts: Dict[str, int]
+    comparison_status_counts: Dict[str, int]
+    pair_status_counts: Dict[str, int]
+    groups: Tuple[str, ...]
+    providers: Tuple[str, ...]
+    brands: Tuple[str, ...]
+    models: Tuple[str, ...]
+    group_count: int
+    evaluated_rate: float
+    price_comparable_rate: float
+    verdict_counts: Dict[str, int]
+    decision_reason_counts: Dict[str, int]
+    price_winner_counts: Dict[str, int]
+    observed_lower_provider_counts: Dict[str, int]
+    average_nominal_difference_huf: Optional[int]
+    average_nominal_difference_percent: Optional[float]
+    next_best_action_counts: Dict[str, int]
+    management_summary: str
+
+
+class BenchmarkDecisionDashboardServiceV2:
+    def __init__(self, repository=None):
+        self.repository = repository or BenchmarkReadRepository()
+
+    def load(self) -> BenchmarkDecisionDashboardDataV2:
+        run = self.repository.latest_run()
+        results = self.repository.results_for_run(run.id) if run is not None else ()
+
+        blocker_counts = {}
+        comparison_status_counts = {}
+        pair_status_counts = {}
+        verdict_counts = {}
+        decision_reason_counts = {}
+        price_winner_counts = {}
+        observed_lower_provider_counts = {}
+        next_best_action_counts = {}
+        nominal_differences_huf = []
+        nominal_differences_percent = []
+
+        for row in results:
+            cstatus = row.comparison_status or "UNKNOWN"
+            comparison_status_counts[cstatus] = comparison_status_counts.get(cstatus, 0) + 1
+
+            pstatus = row.pair_status or "UNKNOWN"
+            pair_status_counts[pstatus] = pair_status_counts.get(pstatus, 0) + 1
+
+            for blocker in row.blockers:
+                code = blocker.get("code") or "UNKNOWN_BLOCKER"
+                blocker_counts[code] = blocker_counts.get(code, 0) + 1
+
+            if row.price_winner:
+                price_winner_counts[row.price_winner] = price_winner_counts.get(row.price_winner, 0) + 1
+
+            decision = self._decision(row.response)
+            if not decision:
+                continue
+
+            verdict = decision.get("verdict") or "UNKNOWN"
+            verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
+
+            for reason in decision.get("decision_reasons") or ():
+                if reason:
+                    decision_reason_counts[reason] = decision_reason_counts.get(reason, 0) + 1
+
+            observed = decision.get("observed_price_difference") or {}
+            lower_provider = observed.get("lower_provider")
+            if lower_provider and lower_provider != "TIE":
+                observed_lower_provider_counts[lower_provider] = observed_lower_provider_counts.get(lower_provider, 0) + 1
+
+            difference_huf = observed.get("difference_huf")
+            if isinstance(difference_huf, (int, float)):
+                nominal_differences_huf.append(float(difference_huf))
+
+            difference_percent = observed.get("difference_percent")
+            if isinstance(difference_percent, (int, float)):
+                nominal_differences_percent.append(float(difference_percent))
+
+            action = decision.get("next_best_action")
+            if action:
+                next_best_action_counts[action] = next_best_action_counts.get(action, 0) + 1
+
+        pair_count = len(results)
+        evaluated_count = sum(1 for row in results if row.bridge_status == "EVALUATED")
+        price_comparable_count = sum(1 for row in results if row.price_comparison_allowed)
+        group_count = len({row.group_key for row in results if row.group_key})
+        evaluated_rate = round(evaluated_count / pair_count * 100, 2) if pair_count else 0.0
+        price_comparable_rate = round(price_comparable_count / pair_count * 100, 2) if pair_count else 0.0
+        avg_huf = round(mean(nominal_differences_huf)) if nominal_differences_huf else None
+        avg_pct = round(mean(nominal_differences_percent), 2) if nominal_differences_percent else None
+
+        return BenchmarkDecisionDashboardDataV2(
+            run=self._serialize_record(run),
+            results=tuple(
+                self._serialize_record(row)
+                for row in results
+            ),
+            pair_count=pair_count,
+            evaluated_count=evaluated_count,
+            failed_count=pair_count - evaluated_count,
+            price_comparable_count=price_comparable_count,
+            blocked_count=pair_count - price_comparable_count,
+            blocker_counts=self._sorted_counts(blocker_counts),
+            comparison_status_counts=dict(sorted(comparison_status_counts.items())),
+            pair_status_counts=dict(sorted(pair_status_counts.items())),
+            groups=tuple(sorted({r.group_key for r in results if r.group_key})),
+            providers=tuple(sorted({p for r in results for p in (r.left_provider, r.right_provider) if p})),
+            brands=tuple(sorted({r.brand for r in results if r.brand})),
+            models=tuple(sorted({r.model for r in results if r.model})),
+            group_count=group_count,
+            evaluated_rate=evaluated_rate,
+            price_comparable_rate=price_comparable_rate,
+            verdict_counts=self._sorted_counts(verdict_counts),
+            decision_reason_counts=self._sorted_counts(decision_reason_counts),
+            price_winner_counts=self._sorted_counts(price_winner_counts),
+            observed_lower_provider_counts=self._sorted_counts(observed_lower_provider_counts),
+            average_nominal_difference_huf=avg_huf,
+            average_nominal_difference_percent=avg_pct,
+            next_best_action_counts=self._sorted_counts(next_best_action_counts),
+            management_summary=self._management_summary(
+                pair_count,
+                group_count,
+                evaluated_count,
+                price_comparable_count,
+                verdict_counts,
+                decision_reason_counts,
+                observed_lower_provider_counts,
+            ),
+        )
+
+    @staticmethod
+    def _serialize_record(record):
+        if record is None:
+            return None
+
+        try:
+            return asdict(record)
+        except TypeError:
+            data = getattr(record, "__dict__", None)
+            if isinstance(data, dict):
+                return dict(data)
+
+        return None
+
+    @staticmethod
+    def _decision(response):
+        if not isinstance(response, dict):
+            return {}
+        decision = response.get("decision")
+        return decision if isinstance(decision, dict) else {}
+
+    @staticmethod
+    def _sorted_counts(counts):
+        return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+    @staticmethod
+    def _management_summary(
+        pair_count,
+        group_count,
+        evaluated_count,
+        price_comparable_count,
+        verdict_counts,
+        decision_reason_counts,
+        observed_lower_provider_counts,
+    ):
+        if not pair_count:
+            return "No benchmark pair results are available."
+
+        evaluated_rate = evaluated_count / pair_count * 100
+        comparable_rate = price_comparable_count / pair_count * 100
+
+        parts = [
+            f"{pair_count} offer pairs across {group_count} unique vehicle groups are in the latest benchmark run.",
+            f"{evaluated_count}/{pair_count} pairs ({evaluated_rate:.1f}%) completed full technical evaluation.",
+            f"{price_comparable_count}/{pair_count} pairs ({comparable_rate:.1f}%) are currently safe for price ranking.",
+        ]
+
+        if verdict_counts:
+            parts.append(
+                "Decision verdicts: "
+                + ", ".join(f"{k}: {v}" for k, v in sorted(verdict_counts.items()))
+                + "."
+            )
+
+        if decision_reason_counts:
+            k, v = sorted(decision_reason_counts.items(), key=lambda item: (-item[1], item[0]))[0]
+            parts.append(f"Most frequent decision reason: {k} ({v} pairs).")
+
+        if observed_lower_provider_counts:
+            k, v = sorted(observed_lower_provider_counts.items(), key=lambda item: (-item[1], item[0]))[0]
+            parts.append(
+                f"{k} has the lower observed nominal monthly fee in {v} pairs. "
+                "This is not a normalized price-win count."
+            )
+
+        return " ".join(parts)

@@ -3,226 +3,9 @@ import re
 
 class VehicleNormalizer:
 
-    BRANDS = [
-        "BYD",
-        "PEUGEOT",
-        "OPEL",
-        "RENAULT",
-        "SUZUKI",
-        "KIA",
-        "JAECOO",
-        "FORD",
-        "TOYOTA",
-        "VOLKSWAGEN",
-        "VOLVO",
-        "BMW",
-        "MERCEDES-BENZ",
-        "MERCEDES",
-        "AUDI",
-        "SKODA",
-        "CITROEN",
-        "FIAT",
-        "NISSAN",
-        "HYUNDAI",
-        "MG",
-    ]
-
-    MODEL_PATTERNS = {
-        "BYD": [
-            "ATTO 2",
-            "ATTO 3",
-            "ATTO 4",
-            "SEALION 5",
-            "SEALION 7",
-            "SEAL U",
-            "SEAL",
-            "DOLPHIN",
-            "HAN",
-            "TANG",
-        ],
-        "PEUGEOT": [
-            "208",
-            "2008",
-            "308",
-            "408",
-            "3008",
-            "5008",
-            "PARTNER",
-            "EXPERT",
-        ],
-        "OPEL": [
-            "CORSA",
-            "MOKKA",
-            "ASTRA",
-            "GRANDLAND",
-            "COMBO CARGO",
-            "COMBO",
-            "VIVARO",
-            "ZAFIRA",
-        ],
-        "RENAULT": [
-            "CLIO",
-            "CAPTUR",
-            "MEGANE",
-            "AUSTRAL",
-            "ARKANA",
-            "KANGOO",
-            "TRAFIC",
-            "MASTER",
-        ],
-        "SUZUKI": [
-            "SWIFT",
-            "VITARA",
-            "S-CROSS",
-            "ACROSS",
-            "IGNIS",
-        ],
-        "KIA": [
-            "PICANTO",
-            "RIO",
-            "CEED",
-            "NIRO",
-            "SPORTAGE",
-            "SORRENTO",
-            "PV5",
-            "EV3",
-            "EV6",
-            "EV9",
-        ],
-    }
-
-    FUEL_KEYWORDS = {
-        "PHEV": [
-            "PHEV",
-            "PLUG-IN",
-            "PLUG IN",
-            "PLUGIN",
-        ],
-        "EV": [
-            "EV",
-            "ELECTRIC",
-            "ELEKTROMOS",
-            "KWH",
-        ],
-        "HYBRID": [
-            "HYBRID",
-            "HIBRID",
-            "MHEV",
-        ],
-        "DIESEL": [
-            "DIESEL",
-            "DÍZEL",
-            "DIZEL",
-            "BLUE DCI",
-            "TDI",
-            "CDTI",
-        ],
-        "PETROL": [
-            "PETROL",
-            "BENZIN",
-            "TURBO",
-            "TSI",
-            "MPI",
-        ],
-    }
-
-    def normalize(self, title: str) -> dict:
-
-        original_title = title
-
-        title = self._clean(title)
-
-        brand = self._extract_brand(title)
-
-        model = self._extract_model(
-            title,
-            brand,
-        )
-
-        fuel_type = self._extract_fuel_type(title)
-
-        return {
-            "original_title": original_title,
-            "brand": brand,
-            "model": model,
-            "fuel_type": fuel_type,
-        }
-
-    def _clean(self, title: str) -> str:
-
-        title = title.upper().strip()
-
-        title = re.sub(
-            r"\s+",
-            " ",
-            title,
-        )
-
-        return title
-
-    def _extract_brand(self, title: str) -> str:
-
-        for brand in sorted(
-            self.BRANDS,
-            key=len,
-            reverse=True,
-        ):
-            if title.startswith(brand):
-                return brand
-
-        return ""
-
-    def _extract_model(
-        self,
-        title: str,
-        brand: str,
-    ) -> str:
-
-        if not brand:
-            return title
-
-        remaining = title[
-            len(brand):
-        ].strip()
-
-        patterns = self.MODEL_PATTERNS.get(
-            brand,
-            [],
-        )
-
-        for pattern in sorted(
-            patterns,
-            key=len,
-            reverse=True,
-        ):
-
-            if remaining.startswith(pattern):
-                return pattern
-
-        # Ha nincs ismert modell,
-        # legalább az első tokeneket tartjuk meg.
-        parts = remaining.split()
-
-        if len(parts) >= 2:
-            return " ".join(parts[:2])
-
-        return remaining
-
-    def _extract_fuel_type(
-        self,
-        title: str,
-    ) -> str:
-
-        for fuel_type, keywords in self.FUEL_KEYWORDS.items():
-
-            for keyword in keywords:
-
-                if keyword in title:
-                    return fuel_type
-import re
-
-
-class VehicleNormalizer:
+    # ------------------------------------------------
+    # BRANDS
+    # ------------------------------------------------
 
     BRANDS = [
         "MERCEDES-BENZ",
@@ -243,7 +26,6 @@ class VehicleNormalizer:
         "LEXUS",
         "DACIA",
         "MERCEDES",
-        "MERCEDES-BENZ",
         "BMW",
         "VOLVO",
         "KIA",
@@ -265,10 +47,16 @@ class VehicleNormalizer:
         "MERCEDES": "MERCEDES-BENZ",
     }
 
+    # ------------------------------------------------
+    # MODEL PATTERNS
+    # ------------------------------------------------
+
     MODEL_PATTERNS = {
+
         "BYD": [
             "ATTO 2",
             "ATTO 3",
+            "ATTO 4",
             "SEALION 5",
             "SEALION 7",
             "SEAL U",
@@ -389,16 +177,6 @@ class VehicleNormalizer:
             "SPRINTER",
         ],
 
-        "RENAULT": [
-            "AUSTRAL",
-            "KANGOO",
-            "TRAFIC",
-            "MASTER",
-            "CLIO",
-            "CAPTUR",
-            "MEGANE",
-        ],
-
         "LAND ROVER": [
             "DEFENDER",
             "RANGE ROVER SPORT",
@@ -434,7 +212,26 @@ class VehicleNormalizer:
         ],
     }
 
+    # ------------------------------------------------
+    # MODEL ALIASES
+    # ------------------------------------------------
+
+    MODEL_ALIASES = {
+
+        "COMBO CARGO": "COMBO",
+        "COMBO": "COMBO",
+
+        "SCROSS": "S-CROSS",
+        "S-CROSS": "S-CROSS",
+
+    }
+
+    # ------------------------------------------------
+    # FUEL ALIASES
+    # ------------------------------------------------
+
     FUEL_ALIASES = {
+
         "EV": "EV",
         "ELEKTROMOS": "EV",
         "100% ELEKTROMOS": "EV",
@@ -456,6 +253,10 @@ class VehicleNormalizer:
         "DIZEL": "DIESEL",
     }
 
+    # ------------------------------------------------
+    # NORMALIZE
+    # ------------------------------------------------
+
     def normalize(
         self,
         title: str,
@@ -464,16 +265,20 @@ class VehicleNormalizer:
 
         original_title = title
 
-        title = self._clean(title)
+        title = self._clean(
+            title
+        )
 
-        brand = self._extract_brand(title)
+        brand = self._extract_brand(
+            title
+        )
 
         model = self._extract_model(
             title,
             brand,
         )
 
-        normalized_fuel = (
+        fuel_type = (
             self.normalize_fuel_type(
                 fuel_type
             )
@@ -483,8 +288,12 @@ class VehicleNormalizer:
             "original_title": original_title,
             "brand": brand,
             "model": model,
-            "fuel_type": normalized_fuel,
+            "fuel_type": fuel_type,
         }
+
+    # ------------------------------------------------
+    # FUEL
+    # ------------------------------------------------
 
     def normalize_fuel_type(
         self,
@@ -505,6 +314,60 @@ class VehicleNormalizer:
             normalized,
         )
 
+    # ------------------------------------------------
+    # MODEL
+    # ------------------------------------------------
+
+    def normalize_model(
+        self,
+        model: str,
+    ) -> str:
+
+        if not model:
+            return ""
+
+        normalized = self._clean(
+            model
+        )
+
+        normalized = (
+            self.MODEL_ALIASES.get(
+                normalized,
+                normalized,
+            )
+        )
+
+        return normalized
+
+    # ------------------------------------------------
+    # BRAND
+    # ------------------------------------------------
+
+    def normalize_brand(
+        self,
+        brand: str,
+    ) -> str:
+
+        if not brand:
+            return ""
+
+        normalized = self._clean(
+            brand
+        )
+
+        return self.BRAND_ALIASES.get(
+            normalized,
+            normalized,
+        )
+
+    # ------------------------------------------------
+    # VEHICLE KEY
+    #
+    # Fontos:
+    # COMBO CARGO -> COMBO
+    # SCROSS -> S-CROSS
+    # ------------------------------------------------
+
     def vehicle_key(
         self,
         brand: str,
@@ -512,11 +375,18 @@ class VehicleNormalizer:
         fuel_type: str,
     ) -> str:
 
-        brand = self._clean(brand)
-        model = self._clean(model)
+        brand = self.normalize_brand(
+            brand
+        )
 
-        fuel_type = self.normalize_fuel_type(
-            fuel_type
+        model = self.normalize_model(
+            model
+        )
+
+        fuel_type = (
+            self.normalize_fuel_type(
+                fuel_type
+            )
         )
 
         return (
@@ -525,24 +395,35 @@ class VehicleNormalizer:
             f"{fuel_type}"
         )
 
+    # ------------------------------------------------
+    # CLEAN
+    # ------------------------------------------------
+
     def _clean(
         self,
-        title: str,
+        value: str,
     ) -> str:
 
-        title = (
-            title
+        if not value:
+            return ""
+
+        value = (
+            value
             .upper()
             .strip()
         )
 
-        title = re.sub(
+        value = re.sub(
             r"\s+",
             " ",
-            title,
+            value,
         )
 
-        return title
+        return value
+
+    # ------------------------------------------------
+    # BRAND EXTRACTION
+    # ------------------------------------------------
 
     def _extract_brand(
         self,
@@ -555,7 +436,9 @@ class VehicleNormalizer:
             reverse=True,
         ):
 
-            if title.startswith(brand):
+            if title.startswith(
+                brand
+            ):
 
                 return self.BRAND_ALIASES.get(
                     brand,
@@ -563,6 +446,10 @@ class VehicleNormalizer:
                 )
 
         return ""
+
+    # ------------------------------------------------
+    # MODEL EXTRACTION
+    # ------------------------------------------------
 
     def _extract_model(
         self,
@@ -575,10 +462,14 @@ class VehicleNormalizer:
 
         remaining = title
 
-        # A brand levágása.
-        # A BRAND_ALIASES miatt például
-        # ŠKODA → SKODA normalizálódik,
-        # de a címben eredetileg ŠKODA szerepelhet.
+        # ------------------------------------------------
+        # Remove source brand from title.
+        # Handles aliases such as:
+        #
+        # ŠKODA -> SKODA
+        # MERCEDES -> MERCEDES-BENZ
+        # ------------------------------------------------
+
         for source_brand in sorted(
             self.BRANDS,
             key=len,
@@ -592,13 +483,19 @@ class VehicleNormalizer:
                 )
             )
 
-            if normalized_brand == brand and remaining.startswith(
-                source_brand
+            if (
+                normalized_brand == brand
+                and
+                remaining.startswith(
+                    source_brand
+                )
             ):
 
-                remaining = remaining[
-                    len(source_brand):
-                ].strip()
+                remaining = (
+                    remaining[
+                        len(source_brand):
+                    ].strip()
+                )
 
                 break
 
@@ -613,14 +510,26 @@ class VehicleNormalizer:
             reverse=True,
         ):
 
-            if remaining.startswith(pattern):
+            if remaining.startswith(
+                pattern
+            ):
 
-                return pattern
+                return self.normalize_model(
+                    pattern
+                )
+
+        # ------------------------------------------------
+        # FALLBACK
+        # ------------------------------------------------
 
         parts = remaining.split()
 
         if len(parts) >= 2:
-            return " ".join(parts[:2])
 
-        return remaining
-        return ""
+            return self.normalize_model(
+                " ".join(parts[:2])
+            )
+
+        return self.normalize_model(
+            remaining
+        )

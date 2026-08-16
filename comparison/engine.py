@@ -1,9 +1,13 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from models.offer import Offer
+
 from matching.vehicle_matcher import VehicleMatcher
 from matching.contract_matcher import ContractMatcher
+from matching.vehicle_variant import (
+    VehicleVariantMatcher,
+)
 
 
 @dataclass
@@ -11,8 +15,9 @@ class ComparisonResult:
 
     brand: str
     model: str
+
     fuel_type_a: str
-    fuel_type_b: str    
+    fuel_type_b: str
 
     vehicle_confidence: int
     vehicle_match_type: str
@@ -37,6 +42,24 @@ class ComparisonResult:
     price_winner_is_valid: bool
     price_difference_percent: float
 
+    # ------------------------------------------------
+    # VEHICLE VARIANT V1
+    #
+    # Defaults are intentional.
+    #
+    # This keeps backwards compatibility with older
+    # tests and code that instantiate ComparisonResult
+    # directly.
+    # ------------------------------------------------
+
+    variant_confidence: int = 0
+    variant_match_type: str = (
+        "NO_VARIANT_INFORMATION"
+    )
+
+    variant_key_a: Optional[str] = None
+    variant_key_b: Optional[str] = None
+
 
 class ComparisonEngine:
 
@@ -44,6 +67,10 @@ class ComparisonEngine:
 
         self.vehicle_matcher = (
             VehicleMatcher()
+        )
+
+        self.variant_matcher = (
+            VehicleVariantMatcher()
         )
 
         self.contract_matcher = (
@@ -59,6 +86,10 @@ class ComparisonEngine:
 
         providers = {}
 
+        # ------------------------------------------------
+        # GROUP OFFERS BY PROVIDER
+        # ------------------------------------------------
+
         for offer in offers:
 
             provider = (
@@ -68,6 +99,7 @@ class ComparisonEngine:
             )
 
             if provider not in providers:
+
                 providers[provider] = []
 
             providers[provider].append(
@@ -77,6 +109,10 @@ class ComparisonEngine:
         provider_names = list(
             providers.keys()
         )
+
+        # ------------------------------------------------
+        # PROVIDER PAIRS
+        # ------------------------------------------------
 
         for i in range(
             len(provider_names)
@@ -95,6 +131,10 @@ class ComparisonEngine:
                     provider_names[j]
                 )
 
+                # ------------------------------------------------
+                # OFFER PAIRS
+                # ------------------------------------------------
+
                 for offer_a in providers[
                     provider_a
                 ]:
@@ -102,6 +142,10 @@ class ComparisonEngine:
                     for offer_b in providers[
                         provider_b
                     ]:
+
+                        # ------------------------------------------------
+                        # VEHICLE IDENTITY
+                        # ------------------------------------------------
 
                         vehicle_match = (
                             self.vehicle_matcher.match(
@@ -118,24 +162,41 @@ class ComparisonEngine:
                         # VEHICLE MATCH
                         # ------------------------------------------------
                         #
-                        # Csak akkor dobjuk el az ajánlatot,
-                        # ha a márka vagy a modell sem egyezik.
+                        # Brand/model mismatch:
+                        # completely unrelated vehicle.
                         #
-                        # Az eltérő hajtásláncot nem dobjuk el,
-                        # mert ez lehet potential match / adatminőségi
-                        # probléma.
                         # ------------------------------------------------
 
                         if (
                             vehicle_match.match_type
                             == "NO_MATCH"
                         ):
+
                             continue
 
-                        if (
+                        # ------------------------------------------------
+                        # POWERTRAIN MISMATCH
+                        # ------------------------------------------------
+                        #
+                        # Keep as potential match because this can
+                        # represent a data-quality problem.
+                        #
+                        # Example:
+                        #
+                        # BYD ATTO 3
+                        # Arval = PHEV
+                        # Ayvens = EV
+                        #
+                        # ------------------------------------------------
+
+                        powertrain_mismatch = (
                             vehicle_match.match_type
-                            == "MODEL_MATCH_POWERTRAIN_MISMATCH"
-                        ):
+                            == (
+                                "MODEL_MATCH_POWERTRAIN_MISMATCH"
+                            )
+                        )
+
+                        if powertrain_mismatch:
 
                             print(
                                 "⚠️ Vehicle: "
@@ -147,6 +208,130 @@ class ComparisonEngine:
                                 f"powertrain mismatch "
                                 f"({vehicle_match.confidence}%)"
                             )
+
+                        # ------------------------------------------------
+                        # VEHICLE VARIANT
+                        # ------------------------------------------------
+
+                        variant_match = (
+                            self.variant_matcher.match(
+                                offer_a,
+                                offer_b,
+                            )
+                        )
+
+                        # ------------------------------------------------
+                        # VARIANT POWER MISMATCH
+                        #
+                        # Do NOT compare different engine/power variants.
+                        #
+                        # Example:
+                        #
+                        # OPEL COMBO 100 HP
+                        # vs
+                        # OPEL COMBO 130 HP
+                        #
+                        # These are different concrete variants.
+                        # ------------------------------------------------
+
+                        if (
+                            variant_match.variant_match_type
+                            == "VARIANT_POWER_MISMATCH"
+                        ):
+
+                            continue
+
+                        # ------------------------------------------------
+                        # POWERTRAIN MISMATCH
+                        #
+                        # VehicleMatcher already detected this.
+                        #
+                        # We preserve the comparison as a potential
+                        # match even though the variant matcher will
+                        # also identify a powertrain difference.
+                        # ------------------------------------------------
+
+                        if (
+                            variant_match.variant_match_type
+                            == "VARIANT_POWERTRAIN_MISMATCH"
+                        ):
+
+                            variant_confidence = 0
+
+                            variant_match_type = (
+                                "VARIANT_POWERTRAIN_MISMATCH"
+                            )
+
+                            variant_key_a = (
+                                None
+                            )
+
+                            variant_key_b = (
+                                None
+                            )
+
+                        else:
+
+                            variant_confidence = (
+                                variant_match.variant_confidence
+                            )
+
+                            variant_match_type = (
+                                variant_match.variant_match_type
+                            )
+
+                            extracted_a = (
+                                self.variant_matcher.extract(
+                                    offer_a
+                                )
+                            )
+
+                            extracted_b = (
+                                self.variant_matcher.extract(
+                                    offer_b
+                                )
+                            )
+
+                            variant_key_a = (
+                                extracted_a.variant_key
+                            )
+
+                            variant_key_b = (
+                                extracted_b.variant_key
+                            )
+
+                        # ------------------------------------------------
+                        # UNKNOWN VARIANT
+                        # ------------------------------------------------
+                        #
+                        # If neither offer contains useful variant
+                        # information, we retain the comparison but
+                        # explicitly mark the uncertainty.
+                        #
+                        # ------------------------------------------------
+
+                        variant_information_missing = (
+                            variant_match.variant_match_type
+                            == "VARIANT_PARTIAL_MATCH"
+                            or
+                            variant_match.variant_match_type
+                            == "NO_VARIANT_INFORMATION"
+                        )
+
+                        if (
+                            not powertrain_mismatch
+                            and
+                            variant_information_missing
+                        ):
+
+                            variant_confidence = min(
+                                variant_confidence,
+                                50,
+                            )
+
+                        # ------------------------------------------------
+                        # CONTRACT MATCH
+                        # ------------------------------------------------
 
                         contract_match = (
                             self.contract_matcher.match(
@@ -176,13 +361,14 @@ class ComparisonEngine:
                         )
 
                         annual_saving = (
-                            price_difference * 12
+                            price_difference
+                            * 12
                         )
 
                         # ------------------------------------------------
                         # PRICE DIFFERENCE %
                         #
-                        # A drágább ajánlathoz viszonyítunk.
+                        # Relative to the higher monthly fee.
                         # ------------------------------------------------
 
                         highest_price = max(
@@ -203,23 +389,39 @@ class ComparisonEngine:
                             price_difference_percent = 0.0
 
                         # ------------------------------------------------
-                        # PRICE WINNER
-                        #
-                        # Csak összehasonlítható szerződés esetén
-                        # nevezünk meg valódi árgyőztest.
+                        # VALID PRICE WINNER
                         # ------------------------------------------------
+                        #
+                        # Requirements:
+                        #
+                        # 1. Same vehicle identity
+                        # 2. Same powertrain
+                        # 3. Same concrete variant
+                        # 4. Comparable contract
+                        #
+                        # ------------------------------------------------
+
+                        exact_variant = (
+                            variant_match.variant_match_type
+                            == "EXACT_VARIANT"
+                        )
 
                         if (
                             contract_match.comparable
-                            and vehicle_match.match_type
+                            and
+                            vehicle_match.match_type
                             == "EXACT_MATCH"
+                            and
+                            exact_variant
                         ):
 
                             price_winner = (
                                 cheapest.provider
                             )
 
-                            price_winner_is_valid = True
+                            price_winner_is_valid = (
+                                True
+                            )
 
                         else:
 
@@ -227,15 +429,16 @@ class ComparisonEngine:
                                 "NOT_COMPARABLE"
                             )
 
-                            price_winner_is_valid = False
+                            price_winner_is_valid = (
+                                False
+                            )
 
                         # ------------------------------------------------
                         # BEST PROVIDER
                         #
-                        # A meglévő kompatibilitás miatt megtartjuk:
-                        # ez egyszerűen a kisebb havi díjú ajánlat.
+                        # Backwards-compatible nominal result.
                         #
-                        # Ez NEM ugyanaz, mint a valid price winner.
+                        # This is NOT necessarily a valid price winner.
                         # ------------------------------------------------
 
                         best_provider = (
@@ -245,6 +448,10 @@ class ComparisonEngine:
                         best_monthly_fee = (
                             cheapest.monthly_fee
                         )
+
+                        # ------------------------------------------------
+                        # RESULT
+                        # ------------------------------------------------
 
                         results.append(
                             ComparisonResult(
@@ -330,6 +537,26 @@ class ComparisonEngine:
                                         price_difference_percent,
                                         2,
                                     )
+                                ),
+
+                                # ------------------------------------------------
+                                # VARIANT
+                                # ------------------------------------------------
+
+                                variant_confidence=(
+                                    variant_confidence
+                                ),
+
+                                variant_match_type=(
+                                    variant_match_type
+                                ),
+
+                                variant_key_a=(
+                                    variant_key_a
+                                ),
+
+                                variant_key_b=(
+                                    variant_key_b
                                 ),
                             )
                         )

@@ -1,0 +1,430 @@
+from dataclasses import dataclass
+from typing import Optional
+
+from playwright.sync_api import sync_playwright
+
+from api.comparison_presenter import ComparisonPresenterV1
+from comparison.evidence_acquisition_orchestrator import (
+    EvidenceAcquisitionOrchestrator,
+)
+from comparison.evidence_enrichment_bridge import (
+    EvidenceEnrichmentBridge,
+)
+from comparison.full_comparison_orchestrator import (
+    FullComparisonOrchestrator,
+)
+from contract_normalization.contract_normalization_evidence_resolver_v2 import (
+    ContractNormalizationEvidenceResolverV2,
+)
+from comparison.manufacturer_equipment_acquisition import (
+    ManufacturerEquipmentAcquisition,
+)
+from comparison.provider_acquisition_router import (
+    ProviderAcquisitionRouter,
+)
+from market_intelligence.market_match_engine import (
+    MarketOfferPair,
+)
+from models.vehicle_identity_normalizer import (
+    VehicleIdentityNormalizer,
+)
+from scrapers.arval.acquisition_connector_integrated import (
+    ArvalServiceIntegratedAcquisitionConnector,
+)
+from scrapers.arval.evidence_aware_builder import (
+    ArvalEvidenceAwareBuilder,
+)
+from scrapers.ayvens.acquisition_connector import (
+    AyvensAcquisitionConnector,
+)
+from scrapers.ayvens.evidence_aware_builder import (
+    AyvensEvidenceAwareBuilder,
+)
+from scrapers.manufacturers.byd_equipment_connector import (
+    BYDManufacturerEquipmentConnector,
+)
+
+
+PAIR_EVALUATED = "EVALUATED"
+PAIR_UNSUPPORTED_PROVIDER = "UNSUPPORTED_PROVIDER"
+PAIR_LOAD_FAILED = "LOAD_FAILED"
+
+
+@dataclass(frozen=True)
+class MarketPairFullComparisonResult:
+    pair_key: str
+    status: str
+    pair_status: str
+    group_key: str
+    initial_comparison: Optional[object]
+    acquisition: Optional[object]
+    enrichment: Optional[object]
+    final_comparison: Optional[object]
+    response: Optional[object]
+    diagnostic: str = ""
+
+
+class MarketPairFullComparisonBridge:
+    """
+    Market Pair -> Full Comparison Bridge V2.
+
+    V2 adds structured Arval exact-offer service acquisition before the
+    existing generic Arval service-discovery fallback.
+    """
+
+    SUPPORTED_PROVIDERS = {
+        "arval",
+        "ayvens",
+    }
+
+    def evaluate(
+        self,
+        pair: MarketOfferPair,
+        *,
+        headless: bool = False,
+    ) -> MarketPairFullComparisonResult:
+
+        if not self._supported_pair(pair):
+            return MarketPairFullComparisonResult(
+                pair_key=pair.pair_key,
+                status=PAIR_UNSUPPORTED_PROVIDER,
+                pair_status=pair.pair_status,
+                group_key=pair.group_key,
+                initial_comparison=None,
+                acquisition=None,
+                enrichment=None,
+                final_comparison=None,
+                response=None,
+                diagnostic=(
+                    "Market Pair Full Comparison V2 supports only "
+                    "Arval/Ayvens provider pairs."
+                ),
+            )
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=headless
+            )
+
+            try:
+                try:
+                    left = self._load(
+                        browser,
+                        pair.left_provider,
+                        pair.left_url,
+                    )
+                    right = self._load(
+                        browser,
+                        pair.right_provider,
+                        pair.right_url,
+                    )
+                except Exception as exc:
+                    return MarketPairFullComparisonResult(
+                        pair_key=pair.pair_key,
+                        status=PAIR_LOAD_FAILED,
+                        pair_status=pair.pair_status,
+                        group_key=pair.group_key,
+                        initial_comparison=None,
+                        acquisition=None,
+                        enrichment=None,
+                        final_comparison=None,
+                        response=None,
+                        diagnostic=(
+                            f"{type(exc).__name__}: {exc}"
+                        ),
+                    )
+
+                initial = (
+                    FullComparisonOrchestrator()
+                    .compare(
+                        left,
+                        right,
+                        observed_offer_pool=[
+                            left.composite.offer,
+                            right.composite.offer,
+                        ],
+                    )
+                )
+
+                manufacturer = (
+                    self._manufacturer_acquisition(
+                        browser,
+                        pair,
+                    )
+                )
+
+                router = ProviderAcquisitionRouter(
+                    arval_connector=(
+                        ArvalServiceIntegratedAcquisitionConnector(
+                            browser,
+                            canonical_key_builder=(
+                                self._canonical_key
+                            ),
+                        )
+                    ),
+                    ayvens_connector=(
+                        AyvensAcquisitionConnector(
+                            browser,
+                            canonical_key_builder=(
+                                self._canonical_key
+                            ),
+                        )
+                    ),
+                    manufacturer_equipment=manufacturer,
+                )
+
+                acquisition = router.execute(
+                    initial,
+                    left,
+                    right,
+                )
+
+                enrichment = (
+                    EvidenceEnrichmentBridge()
+                    .enrich(
+                        left,
+                        right,
+                        acquisition,
+                    )
+                )
+
+                contract_evidence = (
+                    ContractNormalizationEvidenceResolverV2(
+                        browser
+                    )
+                    .resolve(
+                        left.composite.offer,
+                        right.composite.offer,
+                    )
+                )
+
+                final = (
+                    FullComparisonOrchestrator()
+                    .compare(
+                        left,
+                        right,
+                        observed_offer_pool=[
+                            left.composite.offer,
+                            right.composite.offer,
+                        ],
+                        left_variant_items=(
+                            enrichment.left_equipment.items
+                        ),
+                        right_variant_items=(
+                            enrichment.right_equipment.items
+                        ),
+                        left_variant_equipment_status=(
+                            enrichment
+                            .left_equipment
+                            .usable_status
+                        ),
+                        right_variant_equipment_status=(
+                            enrichment
+                            .right_equipment
+                            .usable_status
+                        ),
+                        left_service_package=(
+                            enrichment.left_services.package
+                        ),
+                        right_service_package=(
+                            enrichment.right_services.package
+                        ),
+                        left_financial=(
+                            enrichment.left_financial.financial
+                        ),
+                        right_financial=(
+                            enrichment.right_financial.financial
+                        ),
+                        contract_evidence=contract_evidence,
+                    )
+                )
+
+                response = (
+                    ComparisonPresenterV1()
+                    .present(
+                        final,
+                        left,
+                        right,
+                        left_financial=(
+                            enrichment.left_financial.financial
+                        ),
+                        right_financial=(
+                            enrichment.right_financial.financial
+                        ),
+                        left_pricing_basis=(
+                            enrichment
+                            .left_financial
+                            .pricing_basis
+                        ),
+                        right_pricing_basis=(
+                            enrichment
+                            .right_financial
+                            .pricing_basis
+                        ),
+                    )
+                )
+
+                return MarketPairFullComparisonResult(
+                    pair_key=pair.pair_key,
+                    status=PAIR_EVALUATED,
+                    pair_status=pair.pair_status,
+                    group_key=pair.group_key,
+                    initial_comparison=initial,
+                    acquisition=acquisition,
+                    enrichment=enrichment,
+                    final_comparison=final,
+                    response=response,
+                    diagnostic=(
+                        "Live pair evaluation completed through "
+                        "structured Arval exact-offer service acquisition, "
+                        "enrichment and full reassessment."
+                    ),
+                )
+
+            finally:
+                browser.close()
+
+    @classmethod
+    def _load(
+        cls,
+        browser,
+        provider: str,
+        url: str,
+    ):
+        builder = cls._builder_for(
+            provider
+        )
+        page = browser.new_page()
+
+        try:
+            page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=60000,
+            )
+            page.wait_for_timeout(1800)
+            cls._dismiss(page)
+            return builder.build(page)
+        finally:
+            page.close()
+
+    @staticmethod
+    def _builder_for(
+        provider: str,
+    ):
+        p = provider.strip().casefold()
+
+        if p == "arval":
+            return ArvalEvidenceAwareBuilder()
+
+        if p == "ayvens":
+            return AyvensEvidenceAwareBuilder()
+
+        raise ValueError(
+            f"Unsupported provider: {provider}"
+        )
+
+    @classmethod
+    def _manufacturer_acquisition(
+        cls,
+        browser,
+        pair,
+    ):
+        if (
+            (pair.brand or "")
+            .strip()
+            .upper()
+            != "BYD"
+        ):
+            return None
+
+        connector = (
+            BYDManufacturerEquipmentConnector(
+                browser
+            )
+        )
+
+        return ManufacturerEquipmentAcquisition(
+            canonical_identity_builder=(
+                cls._canonical_identity
+            ),
+            manufacturer_discovery=(
+                connector.discover
+            ),
+        )
+
+    @staticmethod
+    def _canonical_key(
+        wrapped,
+    ):
+        return (
+            EvidenceAcquisitionOrchestrator()
+            ._vehicle_key(wrapped)
+        )
+
+    @staticmethod
+    def _canonical_identity(
+        brand,
+        model,
+        trim,
+        fuel,
+    ):
+        n = (
+            VehicleIdentityNormalizer()
+            .normalize(
+                brand,
+                model,
+                trim,
+                fuel,
+            )
+        )
+
+        return {
+            "brand": n.brand,
+            "model": n.model,
+            "fuel_type": n.fuel_type,
+            "trim": (
+                (trim or "")
+                .upper()
+                .strip()
+            ),
+        }
+
+    @classmethod
+    def _supported_pair(
+        cls,
+        pair,
+    ) -> bool:
+        providers = {
+            (
+                pair.left_provider
+                or ""
+            ).strip().casefold(),
+            (
+                pair.right_provider
+                or ""
+            ).strip().casefold(),
+        }
+
+        return providers == cls.SUPPORTED_PROVIDERS
+
+    @staticmethod
+    def _dismiss(page):
+        for selector in (
+            "#onetrust-reject-all-handler",
+            "#onetrust-accept-btn-handler",
+            "button:has-text('Összes elfogadása')",
+            "button:has-text('Elfogadom')",
+            "button:has-text('Elutasítom')",
+        ):
+            loc = page.locator(selector)
+
+            if not loc.count():
+                continue
+
+            try:
+                loc.first.click(timeout=1800)
+                page.wait_for_timeout(300)
+                return
+            except Exception:
+                pass

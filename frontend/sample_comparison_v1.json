@@ -1,0 +1,103 @@
+{
+  "api_version": "comparison.v1",
+  "status": "INSUFFICIENT_EVIDENCE",
+  "price_comparison_allowed": false,
+  "price_winner": null,
+  "left_offer": {
+    "provider": "Arval",
+    "vehicle": {
+      "brand": "BYD",
+      "model": "ATTO 2",
+      "trim": "BOOST",
+      "fuel_type": "PHEV"
+    },
+    "contract": {
+      "duration_months": 60,
+      "mileage_km_per_year": 20000
+    },
+    "price": {
+      "advertised_monthly_fee_huf": 192312,
+      "comparable_monthly_fee_huf": null,
+      "down_payment": {
+        "status": "UNKNOWN",
+        "percent": null,
+        "amount_huf": null,
+        "evidence": {
+          "status": "UNKNOWN",
+          "source_url": null,
+          "source_text": null
+        }
+      },
+      "pricing_basis": null
+    },
+    "source_url": "https://www.arval.hu/"
+  },
+  "right_offer": {
+    "provider": "Ayvens",
+    "vehicle": {
+      "brand": "BYD",
+      "model": "ATTO 2",
+      "trim": "DM-i",
+      "fuel_type": "PHEV"
+    },
+    "contract": {
+      "duration_months": 48,
+      "mileage_km_per_year": 20000
+    },
+    "price": {
+      "advertised_monthly_fee_huf": 189990,
+      "comparable_monthly_fee_huf": null,
+      "down_payment": {
+        "status": "OBSERVED",
+        "percent": 0.0,
+        "amount_huf": null,
+        "evidence": {
+          "status": "OBSERVED",
+          "source_url": "https://autotartosberlet.ayvens.com/byd/atto-2-dm-i",
+          "source_text": "Observed Ayvens financial switch states on exact offer: 20% initial payment -> 189990 Ft/hó; 0% initial payment -> 223990 Ft/hó."
+        }
+      },
+      "pricing_basis": "OBSERVED_ZERO_DOWN_PAYMENT_STATE"
+    },
+    "source_url": "https://autotartosberlet.ayvens.com/byd/atto-2-dm-i"
+  },
+  "dimensions": {
+    "vehicle": "COMPARABLE",
+    "variant": "INSUFFICIENT_EVIDENCE",
+    "services": "INSUFFICIENT_EVIDENCE",
+    "equipment": "INSUFFICIENT_EVIDENCE",
+    "contract": "NEEDS_TERM_NORMALIZATION",
+    "financial": "INSUFFICIENT_EVIDENCE"
+  },
+  "blockers": [
+    {
+      "code": "VARIANT_EQUIVALENCE_EVIDENCE_INCOMPLETE",
+      "severity": "EVIDENCE",
+      "message": "A kivitelek eltérnek, és nincs teljes felszereltségi evidence mindkét oldalon."
+    },
+    {
+      "code": "SERVICE_EVIDENCE_INCOMPLETE",
+      "severity": "EVIDENCE",
+      "message": "A publikált szolgáltatás evidence nem bizonyít ekvivalens szolgáltatáscsomagot."
+    },
+    {
+      "code": "EQUIPMENT_EVIDENCE_INCOMPLETE",
+      "severity": "EVIDENCE",
+      "message": "Legalább az egyik szolgáltatónál hiányos a felszereltségi evidence."
+    },
+    {
+      "code": "CONTRACT_NORMALIZATION_INCOMPLETE",
+      "severity": "EVIDENCE",
+      "message": "A futamidő eltér: 60 vs 48 hónap."
+    },
+    {
+      "code": "DOWN_PAYMENT_EVIDENCE_INCOMPLETE",
+      "severity": "EVIDENCE",
+      "message": "Az Arval induló befizetése még nem igazolt."
+    }
+  ],
+  "contract_normalization_method": "NONE",
+  "contract_normalization_confidence": 0,
+  "equipment_score_left": null,
+  "equipment_score_right": null
+}

@@ -1,0 +1,526 @@
+from dataclasses import dataclass
+from typing import Any, Optional, Tuple
+
+from comparison.acquisition_executor import EvidenceCandidate
+from models.financial_conditions import (
+    EVIDENCE_OBSERVED,
+    FinancialEvidence,
+    FinancialConditions,
+    DownPayment,
+    ServiceItem,
+    ServicePackage,
+)
+
+
+# Candidate codes produced by provider connectors -> canonical comparison codes.
+SERVICE_CODE_ALIASES = {
+    "MAINTENANCE": "MAINTENANCE",
+    "TYRES": "TYRES",
+    "MOBILITY": "ROADSIDE_ASSISTANCE",
+    "ROADSIDE_ASSISTANCE": "ROADSIDE_ASSISTANCE",
+    "ADMINISTRATION": "FLEET_PORTAL",
+    "FLEET_PORTAL": "FLEET_PORTAL",
+    "TAX": "TAXES",
+    "TAXES": "TAXES",
+    "INSURANCE": "INSURANCE",
+    "CLAIMS_MANAGEMENT": "CLAIMS_MANAGEMENT",
+    "FINANCING": "FINANCING",
+}
+
+# Stable provider-neutral wording that the existing ServicePackageNormalizer
+# already understands. These are semantic bridge labels, not new claims.
+CANONICAL_TO_NORMALIZER_ALIAS = {
+    "MAINTENANCE": "Karbantartás és javítás",
+    "TYRES": "Gumiabroncs kezelés",
+    "ROADSIDE_ASSISTANCE": "Közúti segítségnyújtás",
+    "FLEET_PORTAL": "My Arval",
+    "TAXES": "Vonatkozó adók",
+    "INSURANCE": "Kötelező biztosítás",
+    # This phrase deliberately expands to INSURANCE + CLAIMS_MANAGEMENT in
+    # the existing normalizer. Duplicate INSURANCE=True is harmless.
+    "CLAIMS_MANAGEMENT": "Biztosítás és káresemény-kezelés",
+    "FINANCING": "Finanszírozás",
+}
+
+
+@dataclass(frozen=True)
+class EnrichedEquipmentEvidence:
+    provider: str
+    canonical_vehicle_key: str
+    original_provider_status: str
+    usable_status: str
+    items: Tuple[Any, ...]
+    source_owner: Optional[str]
+    source_type: Optional[str]
+    source_url: Optional[str]
+    provider_published: bool
+    acquisition_used: bool
+    diagnostic: str
+
+
+@dataclass(frozen=True)
+class EnrichedServiceEvidence:
+    provider: str
+    usable_status: str
+    package: ServicePackage
+    acquired_codes: Tuple[str, ...]
+    source_urls: Tuple[str, ...]
+    acquisition_used: bool
+    diagnostic: str
+
+
+@dataclass(frozen=True)
+class EnrichedFinancialEvidence:
+    provider: str
+    usable_status: str
+    financial: Optional[FinancialConditions]
+    source_url: Optional[str]
+    pricing_basis: Optional[str]
+    acquisition_used: bool
+    diagnostic: str
+
+
+@dataclass(frozen=True)
+class EnrichedComparisonContext:
+    left_equipment: EnrichedEquipmentEvidence
+    right_equipment: EnrichedEquipmentEvidence
+    left_services: EnrichedServiceEvidence
+    right_services: EnrichedServiceEvidence
+    left_financial: EnrichedFinancialEvidence
+    right_financial: EnrichedFinancialEvidence
+
+
+class EvidenceEnrichmentBridge:
+    """
+    Evidence Enrichment Bridge V2.
+
+    Equipment logic is preserved from V1.
+
+    V2 adds SERVICE enrichment with a strict applicability barrier:
+    a validated provider service assertion may be promoted into the exact
+    comparison package only when the acquisition payload explicitly says the
+    assertion applies to:
+      - EXACT_OFFER, or
+      - ALL_OFFERS_IN_PROGRAM.
+
+    Generic provider capability/service documentation is NOT enough to prove
+    that a specific advertised offer includes the service.
+
+    Original scraped objects are never mutated.
+    """
+
+    SERVICE_PROMOTABLE_SCOPES = {
+        "EXACT_OFFER",
+        "ALL_OFFERS_IN_PROGRAM",
+    }
+
+    def enrich(self, left, right, acquisition_result) -> EnrichedComparisonContext:
+        candidates = tuple(
+            c for c in acquisition_result.execution.candidates
+            if c.accepted
+        )
+
+        return EnrichedComparisonContext(
+            left_equipment=self._equipment_for_side(left, candidates),
+            right_equipment=self._equipment_for_side(right, candidates),
+            left_services=self._services_for_side(left, candidates),
+            right_services=self._services_for_side(right, candidates),
+            left_financial=self._financial_for_side(left, candidates),
+            right_financial=self._financial_for_side(right, candidates),
+        )
+
+    # ============================================================
+    # FINANCIAL
+    # ============================================================
+
+    def _financial_for_side(
+        self,
+        side,
+        candidates,
+    ) -> EnrichedFinancialEvidence:
+
+        provider = side.composite.provider
+
+        # Backward compatibility:
+        # some older unit-test Composite stubs do not define a financial
+        # attribute at all. Financial enrichment is optional and must not
+        # break equipment/service-only contexts.
+        original = getattr(
+            side.composite,
+            "financial",
+            None,
+        )
+
+        if original is None:
+            return EnrichedFinancialEvidence(
+                provider=provider,
+                usable_status="NOT_AVAILABLE_IN_CONTEXT",
+                financial=None,
+                source_url=None,
+                pricing_basis=None,
+                acquisition_used=False,
+                diagnostic=(
+                    "This comparison context does not expose financial "
+                    "conditions; financial enrichment was skipped."
+                ),
+            )
+
+        financial_candidates = tuple(
+            c for c in candidates
+            if (
+                c.target_dimension == "FINANCIAL"
+                and c.provider.strip().casefold()
+                == provider.strip().casefold()
+            )
+        )
+
+        for candidate in financial_candidates:
+            payload = candidate.payload
+
+            # Financial evidence may affect price comparison only when
+            # explicitly scoped to the exact advertised offer.
+            if payload.get("applicability_scope") != "EXACT_OFFER":
+                continue
+
+            percent = payload.get("down_payment_percent")
+            monthly_fee = payload.get("monthly_fee")
+
+            if percent is None:
+                continue
+
+            # A discovered financial state without its directly observed
+            # monthly fee must not replace the advertised financial view.
+            if monthly_fee is None:
+                continue
+
+            evidence = FinancialEvidence(
+                status=EVIDENCE_OBSERVED,
+                source_url=candidate.source_url,
+                source_text=candidate.source_text,
+            )
+
+            enriched = FinancialConditions(
+                monthly_fee=int(monthly_fee),
+                down_payment=DownPayment(
+                    percent=float(percent),
+                    amount=None,
+                    status=EVIDENCE_OBSERVED,
+                    evidence=evidence,
+                ),
+                other_one_off_fees=original.other_one_off_fees,
+                other_recurring_fees=original.other_recurring_fees,
+                monthly_fee_evidence=evidence,
+            )
+
+            return EnrichedFinancialEvidence(
+                provider=provider,
+                usable_status="ENRICHED_PROVIDER_EVIDENCE",
+                financial=enriched,
+                source_url=candidate.source_url,
+                pricing_basis=payload.get("pricing_basis"),
+                acquisition_used=True,
+                diagnostic=(
+                    "Validated exact-offer financial evidence was promoted "
+                    "into an immutable enriched comparison view."
+                ),
+            )
+
+        return EnrichedFinancialEvidence(
+            provider=provider,
+            usable_status="ORIGINAL_ONLY",
+            financial=original,
+            source_url=None,
+            pricing_basis=None,
+            acquisition_used=False,
+            diagnostic=(
+                "No validated exact-offer financial acquisition evidence "
+                "was promoted."
+            ),
+        )
+
+    # ============================================================
+    # SERVICES
+    # ============================================================
+
+    def _services_for_side(self, side, candidates) -> EnrichedServiceEvidence:
+        provider = side.composite.provider
+        original_items = tuple(side.composite.services.items)
+
+        service_candidates = tuple(
+            c for c in candidates
+            if (
+                c.target_dimension == "SERVICES"
+                and c.candidate_type == "PROVIDER_SERVICE_ASSERTIONS"
+                and c.provider.strip().casefold() == provider.strip().casefold()
+            )
+        )
+
+        acquired_items = []
+        acquired_codes = []
+        source_urls = []
+        blocked_for_scope = 0
+
+        # Deduplicate repeated verification tasks that return the same evidence.
+        seen = set()
+
+        for candidate in service_candidates:
+            payload = candidate.payload
+            scope = payload.get("applicability_scope")
+
+            if scope not in self.SERVICE_PROMOTABLE_SCOPES:
+                blocked_for_scope += 1
+                continue
+
+            assertions = payload.get("services") or ()
+
+            for assertion in assertions:
+                raw_code = assertion.get("code")
+                included = assertion.get("included")
+
+                canonical = SERVICE_CODE_ALIASES.get(raw_code)
+
+                if canonical is None:
+                    continue
+
+                # V1/V2 service comparison supports explicit True/False/None.
+                # Acquisition must not manufacture False from absence.
+                if included is not True and included is not False:
+                    continue
+
+                alias = CANONICAL_TO_NORMALIZER_ALIAS.get(canonical)
+                if alias is None:
+                    continue
+
+                key = (canonical, included)
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                source_text = assertion.get("source_text") or candidate.source_text
+
+                acquired_items.append(
+                    ServiceItem(
+                        name=alias,
+                        category=canonical,
+                        included=included,
+                        evidence=FinancialEvidence(
+                            status=EVIDENCE_OBSERVED,
+                            source_url=candidate.source_url,
+                            source_text=source_text,
+                        ),
+                    )
+                )
+                acquired_codes.append(canonical)
+
+                if candidate.source_url and candidate.source_url not in source_urls:
+                    source_urls.append(candidate.source_url)
+
+        merged = self._merge_service_items(
+            original_items,
+            tuple(acquired_items),
+        )
+
+        if acquired_items:
+            return EnrichedServiceEvidence(
+                provider=provider,
+                usable_status="ENRICHED_PROVIDER_EVIDENCE",
+                package=ServicePackage(items=list(merged)),
+                acquired_codes=tuple(sorted(set(acquired_codes))),
+                source_urls=tuple(source_urls),
+                acquisition_used=True,
+                diagnostic=(
+                    "Validated provider service assertions with explicit "
+                    "offer/program applicability were merged into an enriched "
+                    "service package without mutating the original package."
+                ),
+            )
+
+        diagnostic = "No promotable service acquisition evidence found."
+        if blocked_for_scope:
+            diagnostic = (
+                "Validated service documentation exists, but applicability "
+                "to the exact offer/program is not explicit; generic provider "
+                "documentation was not promoted."
+            )
+
+        return EnrichedServiceEvidence(
+            provider=provider,
+            usable_status="ORIGINAL_ONLY",
+            package=ServicePackage(items=list(original_items)),
+            acquired_codes=(),
+            source_urls=(),
+            acquisition_used=False,
+            diagnostic=diagnostic,
+        )
+
+    @staticmethod
+    def _merge_service_items(original, acquired):
+        """
+        Preserve original items first. Avoid exact duplicate observations.
+        Contradictory canonical semantics are still handled loudly by the
+        existing ServicePackageNormalizer during comparison.
+        """
+        out = list(original)
+        seen = {
+            (
+                item.name.casefold().strip(),
+                item.included,
+            )
+            for item in original
+        }
+
+        for item in acquired:
+            key = (
+                item.name.casefold().strip(),
+                item.included,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(item)
+
+        return tuple(out)
+
+    # ============================================================
+    # EQUIPMENT (V1 behavior)
+    # ============================================================
+
+    def _equipment_for_side(self, side, candidates):
+        provider = side.composite.provider
+        original_status = self._provider_equipment_status(side)
+        original_items = tuple(side.composite.vehicle.all_equipment)
+
+        if self._provider_equipment_usable(side):
+            return EnrichedEquipmentEvidence(
+                provider=provider,
+                canonical_vehicle_key="",
+                original_provider_status=original_status,
+                usable_status="PROVIDER_VALIDATED",
+                items=original_items,
+                source_owner="PROVIDER",
+                source_type="PROVIDER_OFFER_PAGE",
+                source_url=getattr(side.composite.offer, "url", None),
+                provider_published=True,
+                acquisition_used=False,
+                diagnostic=(
+                    "Complete provider-published equipment evidence is usable; "
+                    "no acquisition promotion required."
+                ),
+            )
+
+        equipment_candidates = tuple(
+            c for c in candidates
+            if (
+                c.target_dimension == "EQUIPMENT"
+                and c.provider.strip().casefold() == provider.strip().casefold()
+                and c.candidate_type == "EQUIPMENT_SPECIFICATION"
+            )
+        )
+
+        ranked = sorted(
+            equipment_candidates,
+            key=self._equipment_candidate_rank,
+        )
+
+        for candidate in ranked:
+            promoted = self._promote_equipment_candidate(
+                candidate,
+                original_status,
+            )
+            if promoted is not None:
+                return promoted
+
+        return EnrichedEquipmentEvidence(
+            provider=provider,
+            canonical_vehicle_key="",
+            original_provider_status=original_status,
+            usable_status="UNRESOLVED",
+            items=(),
+            source_owner=None,
+            source_type=None,
+            source_url=None,
+            provider_published=False,
+            acquisition_used=False,
+            diagnostic=(
+                "No validated equipment acquisition candidate passed the "
+                "V2 provenance/trust promotion rules."
+            ),
+        )
+
+    def _promote_equipment_candidate(self, candidate, original_status):
+        payload = candidate.payload
+        items = payload.get("equipment_items")
+
+        if not items:
+            return None
+
+        owner = payload.get("evidence_owner")
+
+        if owner == "PROVIDER":
+            return EnrichedEquipmentEvidence(
+                provider=candidate.provider,
+                canonical_vehicle_key=candidate.canonical_vehicle_key,
+                original_provider_status=original_status,
+                usable_status="PROVIDER_VALIDATED",
+                items=tuple(items),
+                source_owner="PROVIDER",
+                source_type=candidate.source_type,
+                source_url=candidate.source_url,
+                provider_published=True,
+                acquisition_used=True,
+                diagnostic=(
+                    "Validated provider-owned equipment acquisition promoted "
+                    "into the enriched comparison view."
+                ),
+            )
+
+        if owner == "MANUFACTURER" and original_status == "NOT_PUBLISHED":
+            return EnrichedEquipmentEvidence(
+                provider=candidate.provider,
+                canonical_vehicle_key=candidate.canonical_vehicle_key,
+                original_provider_status=original_status,
+                usable_status="MANUFACTURER_VALIDATED",
+                items=tuple(items),
+                source_owner="MANUFACTURER",
+                source_type=candidate.source_type,
+                source_url=candidate.source_url,
+                provider_published=False,
+                acquisition_used=True,
+                diagnostic=(
+                    "Validated manufacturer equipment is usable because the "
+                    "provider explicitly does not publish equipment."
+                ),
+            )
+
+        return None
+
+    @staticmethod
+    def _equipment_candidate_rank(candidate):
+        owner = candidate.payload.get("evidence_owner")
+        return 0 if owner == "PROVIDER" else 1 if owner == "MANUFACTURER" else 2
+
+    @staticmethod
+    def _provider_equipment_status(side):
+        evidence = getattr(side, "equipment_evidence", None)
+        if evidence is None:
+            return "UNKNOWN"
+
+        standard = getattr(evidence, "standard_status", None)
+        optional = getattr(evidence, "optional_status", None)
+
+        if "PARSING_UNRESOLVED" in {standard, optional}:
+            return "PARSING_UNRESOLVED"
+        if standard == "NOT_PUBLISHED" and optional == "NOT_PUBLISHED":
+            return "NOT_PUBLISHED"
+        if standard == "PUBLISHED" or optional == "PUBLISHED":
+            return "PUBLISHED"
+
+        return standard or optional or "UNKNOWN"
+
+    @staticmethod
+    def _provider_equipment_usable(side):
+        evidence = getattr(side, "equipment_evidence", None)
+        return bool(
+            evidence is not None
+            and getattr(evidence, "fully_comparable", False)
+        )

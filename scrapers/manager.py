@@ -1,20 +1,28 @@
-from exporters.excel_exporter import ExcelExporter
-from exporters.json_exporter import JsonExporter
-from scrapers.arval.scraper import ArvalScraper
-from database.database import Database
-
+from market_intelligence.unified_market_collector import UnifiedMarketCollector
 
 class ScraperManager:
-
     def run(self):
+        collector = UnifiedMarketCollector()
 
-        scraper = ArvalScraper()
+        try:
+            result = collector.run()
 
-        offers = scraper.collect()
+            print("\n" + "=" * 72)
+            print("UNIFIED MARKET COLLECTION")
+            print("=" * 72)
+            print("Run:", result.run_id)
+            print("Status:", result.status)
+            print("Offers:", result.total_offers)
 
-        JsonExporter().export(offers, "arval.json")
-        ExcelExporter().export(offers, "arval.xlsx")
+            for item in result.provider_results:
+                print(
+                    f"- {item.provider}: {item.status} "
+                    f"| raw={item.raw_count} "
+                    f"| saved={item.normalized_count}"
+                )
+                if item.diagnostic:
+                    print("  diagnostic:", item.diagnostic)
 
-        repo = OfferRepository()
-        repo.save_all(offers)
-        repo.close()
+            return result
+        finally:
+            collector.close()
