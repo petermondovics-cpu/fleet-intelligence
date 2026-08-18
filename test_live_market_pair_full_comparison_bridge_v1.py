@@ -84,6 +84,10 @@ def main():
         "Diagnostic:",
         result.diagnostic,
     )
+    print(
+        "Stage timings:",
+        result.stage_timings,
+    )
 
     assert (
         result.status
@@ -94,6 +98,18 @@ def main():
         result.response
         is not None
     )
+
+    timing_names = tuple(
+        name
+        for name, seconds
+        in result.stage_timings
+    )
+    assert timing_names[:2] == (
+        "load_left",
+        "load_right",
+    )
+    assert "acquisition" in timing_names
+    assert "contract_evidence" in timing_names
 
     payload = (
         result.response

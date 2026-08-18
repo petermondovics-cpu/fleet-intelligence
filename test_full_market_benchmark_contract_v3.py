@@ -19,6 +19,14 @@ def main():
     print("failed_count:", result.failed_count)
     print("price_comparable_count:", result.price_comparable_count)
 
+    print("\n--- PAIR STAGE TIMINGS ---")
+    for execution in result.executions:
+        print(
+            execution.group_key,
+            execution.bridge_status,
+            execution.stage_timings,
+        )
+
     data = BenchmarkDecisionDashboardServiceV2().load()
 
     print("\n--- DECISION REASONS ---")

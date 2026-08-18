@@ -119,6 +119,7 @@ class FakeBridge:
                 status="LOAD_FAILED",
                 response=None,
                 diagnostic="Synthetic load failure.",
+                stage_timings=(("load_left", 1.25),),
             )
 
         return SimpleNamespace(
@@ -130,6 +131,10 @@ class FakeBridge:
                 status="INSUFFICIENT_EVIDENCE",
             ),
             diagnostic="Synthetic evaluation completed.",
+            stage_timings=(
+                ("load_left", 0.5),
+                ("load_right", 0.75),
+            ),
         )
 
 
@@ -181,6 +186,14 @@ def main():
         assert (
             result.price_comparable_count
             == 0
+        )
+
+        assert result.executions[0].stage_timings == (
+            ("load_left", 0.5),
+            ("load_right", 0.75),
+        )
+        assert result.executions[1].stage_timings == (
+            ("load_left", 1.25),
         )
 
         # The non-candidate pair must never enter the batch.

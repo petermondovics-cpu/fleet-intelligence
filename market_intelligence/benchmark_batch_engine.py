@@ -27,6 +27,7 @@ class BenchmarkPairExecution:
     price_comparison_allowed: bool
     price_winner: Optional[str]
     diagnostic: str
+    stage_timings: Tuple[Tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -229,6 +230,13 @@ class BenchmarkBatchEngine:
                     diagnostic=(
                         bridge_result
                         .diagnostic
+                    ),
+                    stage_timings=tuple(
+                        getattr(
+                            bridge_result,
+                            "stage_timings",
+                            (),
+                        )
                     ),
                 )
             )

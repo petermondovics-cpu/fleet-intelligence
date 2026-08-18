@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Optional
+from typing import Tuple
 
 from playwright.sync_api import sync_playwright
 
@@ -73,6 +75,7 @@ class MarketPairFullComparisonResult:
     response: Optional[object]
     decision: Optional[object] = None
     diagnostic: str = ""
+    stage_timings: Tuple[Tuple[str, float], ...] = ()
 
 
 class MarketPairFullComparisonBridge:
@@ -116,18 +119,27 @@ class MarketPairFullComparisonBridge:
             browser = p.chromium.launch(
                 headless=headless
             )
+            stage_timings = []
 
             try:
                 try:
-                    left = self._load(
-                        browser,
-                        pair.left_provider,
-                        pair.left_url,
+                    left = self._measure(
+                        stage_timings,
+                        "load_left",
+                        lambda: self._load(
+                            browser,
+                            pair.left_provider,
+                            pair.left_url,
+                        ),
                     )
-                    right = self._load(
-                        browser,
-                        pair.right_provider,
-                        pair.right_url,
+                    right = self._measure(
+                        stage_timings,
+                        "load_right",
+                        lambda: self._load(
+                            browser,
+                            pair.right_provider,
+                            pair.right_url,
+                        ),
                     )
                 except Exception as exc:
                     return MarketPairFullComparisonResult(
@@ -143,17 +155,24 @@ class MarketPairFullComparisonBridge:
                         diagnostic=(
                             f"{type(exc).__name__}: {exc}"
                         ),
+                        stage_timings=tuple(
+                            stage_timings
+                        ),
                     )
 
                 initial = (
-                    FullComparisonOrchestrator()
-                    .compare(
-                        left,
-                        right,
-                        observed_offer_pool=[
-                            left.composite.offer,
-                            right.composite.offer,
-                        ],
+                    self._measure(
+                        stage_timings,
+                        "initial_comparison",
+                        lambda: FullComparisonOrchestrator()
+                        .compare(
+                            left,
+                            right,
+                            observed_offer_pool=[
+                                left.composite.offer,
+                                right.composite.offer,
+                            ],
+                        ),
                     )
                 )
 
@@ -189,28 +208,40 @@ class MarketPairFullComparisonBridge:
                     excluded_dimensions=("CONTRACT",),
                 )
 
-                acquisition = router.execute(
-                    initial,
-                    left,
-                    right,
+                acquisition = self._measure(
+                    stage_timings,
+                    "acquisition",
+                    lambda: router.execute(
+                        initial,
+                        left,
+                        right,
+                    ),
                 )
 
                 enrichment = (
-                    EvidenceEnrichmentBridge()
-                    .enrich(
-                        left,
-                        right,
-                        acquisition,
+                    self._measure(
+                        stage_timings,
+                        "enrichment",
+                        lambda: EvidenceEnrichmentBridge()
+                        .enrich(
+                            left,
+                            right,
+                            acquisition,
+                        ),
                     )
                 )
 
                 contract_evidence = (
-                    ContractNormalizationEvidenceResolverV3(
-                        browser
-                    )
-                    .resolve(
-                        left.composite.offer,
-                        right.composite.offer,
+                    self._measure(
+                        stage_timings,
+                        "contract_evidence",
+                        lambda: ContractNormalizationEvidenceResolverV3(
+                            browser
+                        )
+                        .resolve(
+                            left.composite.offer,
+                            right.composite.offer,
+                        ),
                     )
                 )
 
@@ -221,99 +252,119 @@ class MarketPairFullComparisonBridge:
                 )
 
                 left_financial_review = (
-                    financial_reviewer.resolve(
-                        pair.left_provider,
-                        pair.left_url,
-                        enrichment.left_financial.financial,
+                    self._measure(
+                        stage_timings,
+                        "financial_review_left",
+                        lambda: financial_reviewer.resolve(
+                            pair.left_provider,
+                            pair.left_url,
+                            enrichment.left_financial.financial,
+                        ),
                     )
                 )
 
                 right_financial_review = (
-                    financial_reviewer.resolve(
-                        pair.right_provider,
-                        pair.right_url,
-                        enrichment.right_financial.financial,
+                    self._measure(
+                        stage_timings,
+                        "financial_review_right",
+                        lambda: financial_reviewer.resolve(
+                            pair.right_provider,
+                            pair.right_url,
+                            enrichment.right_financial.financial,
+                        ),
                     )
                 )
 
                 final = (
-                    FullComparisonOrchestrator()
-                    .compare(
-                        left,
-                        right,
-                        observed_offer_pool=[
-                            left.composite.offer,
-                            right.composite.offer,
-                        ],
-                        left_variant_items=(
-                            enrichment.left_equipment.items
-                        ),
-                        right_variant_items=(
-                            enrichment.right_equipment.items
-                        ),
-                        left_variant_equipment_status=(
-                            enrichment
-                            .left_equipment
-                            .usable_status
-                        ),
-                        right_variant_equipment_status=(
-                            enrichment
-                            .right_equipment
-                            .usable_status
-                        ),
-                        left_service_package=(
-                            enrichment.left_services.package
-                        ),
-                        right_service_package=(
-                            enrichment.right_services.package
-                        ),
-                        left_financial=(
-                            enrichment.left_financial.financial
-                        ),
-                        right_financial=(
-                            enrichment.right_financial.financial
-                        ),
-                        contract_evidence=contract_evidence,
-                        left_financial_review=(
-                            left_financial_review
-                        ),
-                        right_financial_review=(
-                            right_financial_review
+                    self._measure(
+                        stage_timings,
+                        "final_comparison",
+                        lambda: FullComparisonOrchestrator()
+                        .compare(
+                            left,
+                            right,
+                            observed_offer_pool=[
+                                left.composite.offer,
+                                right.composite.offer,
+                            ],
+                            left_variant_items=(
+                                enrichment.left_equipment.items
+                            ),
+                            right_variant_items=(
+                                enrichment.right_equipment.items
+                            ),
+                            left_variant_equipment_status=(
+                                enrichment
+                                .left_equipment
+                                .usable_status
+                            ),
+                            right_variant_equipment_status=(
+                                enrichment
+                                .right_equipment
+                                .usable_status
+                            ),
+                            left_service_package=(
+                                enrichment.left_services.package
+                            ),
+                            right_service_package=(
+                                enrichment.right_services.package
+                            ),
+                            left_financial=(
+                                enrichment.left_financial.financial
+                            ),
+                            right_financial=(
+                                enrichment.right_financial.financial
+                            ),
+                            contract_evidence=contract_evidence,
+                            left_financial_review=(
+                                left_financial_review
+                            ),
+                            right_financial_review=(
+                                right_financial_review
+                            ),
                         ),
                     )
                 )
 
                 decision = (
-                    ComparisonDecisionExplainerV1()
-                    .explain(
-                        final,
-                        left,
-                        right,
+                    self._measure(
+                        stage_timings,
+                        "decision",
+                        lambda: ComparisonDecisionExplainerV1()
+                        .explain(
+                            final,
+                            left,
+                            right,
+                        ),
                     )
                 )
 
                 response = (
-                    ComparisonPresenterV2()
-                    .present(
-                        final,
-                        decision,
-                        left,
-                        right,
-                        left_financial=(
-                            enrichment.left_financial.financial
-                        ),
-                        right_financial=(
-                            enrichment.right_financial.financial
-                        ),
-                        left_pricing_basis=(
-                            enrichment
-                            .left_financial
-                            .pricing_basis
-                        ),
-                        right_pricing_basis=(
-                            enrichment
-                            .right_financial
-                            .pricing_basis
+                    self._measure(
+                        stage_timings,
+                        "presentation",
+                        lambda: ComparisonPresenterV2()
+                        .present(
+                            final,
+                            decision,
+                            left,
+                            right,
+                            left_financial=(
+                                enrichment.left_financial.financial
+                            ),
+                            right_financial=(
+                                enrichment.right_financial.financial
+                            ),
+                            left_pricing_basis=(
+                                enrichment
+                                .left_financial
+                                .pricing_basis
+                            ),
+                            right_pricing_basis=(
+                                enrichment
+                                .right_financial
+                                .pricing_basis
+                            ),
                         ),
                     )
                 )
@@ -334,10 +385,35 @@ class MarketPairFullComparisonBridge:
                         "structured Arval exact-offer service acquisition, "
                         "enrichment and full reassessment."
                     ),
+                    stage_timings=tuple(
+                        stage_timings
+                    ),
                 )
 
             finally:
                 browser.close()
+
+    @staticmethod
+    def _measure(
+        stage_timings,
+        stage_name,
+        operation,
+    ):
+        started = perf_counter()
+
+        try:
+            return operation()
+        finally:
+            stage_timings.append(
+                (
+                    stage_name,
+                    round(
+                        perf_counter()
+                        - started,
+                        3,
+                    ),
+                )
+            )
 
     @classmethod
     def _load(

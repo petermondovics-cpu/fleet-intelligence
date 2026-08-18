@@ -319,6 +319,19 @@ triage historical test debt. Browser lifecycle has been checked: each pair
 already receives a fresh Playwright/browser lifecycle. Optional manufacturer
 failure is now isolated from core comparison completion.
 
+Structured in-memory bridge stage timings are now available and propagated to
+BenchmarkPairExecution without changing the persisted benchmark schema or any
+decision/blocker text. A live ATTO 2 diagnostic measured:
+
+    load_left (Arval): 12.393 seconds
+    load_right (Ayvens): 61.290 seconds -> Page.goto timeout
+
+The matching Ayvens exact-offer API remained healthy and returned explicit
+configuration metadata in 4.7 seconds. A separate `wait_until="commit"`
+diagnostic returned HTTP 200 in 17.431 seconds, but none of the required offer
+DOM selectors appeared after an additional five seconds. Therefore switching
+to commit-only navigation is not a safe fix and was not implemented.
+
 The historical deterministic script inventory currently reports 97 passing
 and 19 failing scripts. The failures include obsolete API/source-inspection
 expectations and two scripts that launch Chromium despite not being named as

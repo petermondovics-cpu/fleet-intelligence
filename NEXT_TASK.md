@@ -67,9 +67,17 @@ produce UNRESOLVED manufacturer evidence, preserve the provider evidence, and
 leave the equipment blocker in place. A normal headed ATTO 2 bridge run passed
 with INSUFFICIENT_EVIDENCE and no price winner.
 
+Structured stage timing has now been added to bridge and batch results. The
+first live ATTO 2 timing isolated a 61.290-second Ayvens initial offer-page
+timeout after a successful 12.393-second Arval load. The Ayvens exact-offer API
+was still responsive, but a commit-only browser navigation produced no required
+offer DOM evidence. Do not replace DOM evidence with API capability metadata.
+
 ## Validation work
 
-1. Instrument pair/provider/stage timing without changing acquisition results.
+1. Investigate why the Ayvens application can return HTTP 200 while failing to
+   render exact-offer DOM evidence (frontend assets, API calls, browser console,
+   or provider throttling).
 2. Investigate provider throttling across the sequential batch. Each pair
    already uses a fresh browser lifecycle, so focus on request cadence and
    provider-side behavior rather than shared browser state.
