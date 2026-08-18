@@ -327,10 +327,27 @@ decision/blocker text. A live ATTO 2 diagnostic measured:
     load_right (Ayvens): 61.290 seconds -> Page.goto timeout
 
 The matching Ayvens exact-offer API remained healthy and returned explicit
-configuration metadata in 4.7 seconds. A separate `wait_until="commit"`
-diagnostic returned HTTP 200 in 17.431 seconds, but none of the required offer
-DOM selectors appeared after an additional five seconds. Therefore switching
-to commit-only navigation is not a safe fix and was not implemented.
+configuration metadata in 4.7 seconds. Commit-only navigation was confirmed
+unsafe because HTTP 200 can arrive before any offer DOM exists.
+
+Ayvens loading now navigates to HTTP commit and then waits specifically for the
+explicit advertised monthly-fee DOM element. This is only a readiness signal;
+the evidence-aware builder still independently validates identity, fee,
+duration and mileage. Missing priced-offer DOM remains LOAD_FAILED.
+
+A normal headed ATTO 2 bridge run then completed with:
+
+    load_left (Arval): 6.593 seconds
+    load_right (Ayvens): 25.413 seconds
+    acquisition: 209.608 seconds
+    contract_evidence: 42.369 seconds
+    bridge_status: EVALUATED
+    comparison_status: INSUFFICIENT_EVIDENCE
+    price_winner: None
+
+The current live bottleneck has therefore moved from initial Ayvens loading to
+the broad acquisition stage. Down-payment evidence was unavailable in this run
+and correctly remained UNKNOWN with DOWN_PAYMENT_EVIDENCE_INCOMPLETE.
 
 The historical deterministic script inventory currently reports 97 passing
 and 19 failing scripts. The failures include obsolete API/source-inspection

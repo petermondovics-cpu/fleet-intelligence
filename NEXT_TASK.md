@@ -70,14 +70,18 @@ with INSUFFICIENT_EVIDENCE and no price winner.
 Structured stage timing has now been added to bridge and batch results. The
 first live ATTO 2 timing isolated a 61.290-second Ayvens initial offer-page
 timeout after a successful 12.393-second Arval load. The Ayvens exact-offer API
-was still responsive, but a commit-only browser navigation produced no required
-offer DOM evidence. Do not replace DOM evidence with API capability metadata.
+was still responsive, but commit-only navigation could return before offer DOM
+evidence existed.
+
+Ayvens readiness now requires the explicit advertised monthly-fee DOM after
+HTTP commit. A headed ATTO 2 run completed with Ayvens load at 25.413 seconds
+and the full bridge EVALUATED. The main measured bottleneck was acquisition at
+209.608 seconds; Contract V3 took 42.369 seconds. No evidence semantics changed.
 
 ## Validation work
 
-1. Investigate why the Ayvens application can return HTTP 200 while failing to
-   render exact-offer DOM evidence (frontend assets, API calls, browser console,
-   or provider throttling).
+1. Split the broad acquisition timing into service, financial and optional
+   manufacturer sub-stages without changing acquisition results.
 2. Investigate provider throttling across the sequential batch. Each pair
    already uses a fresh browser lifecycle, so focus on request cadence and
    provider-side behavior rather than shared browser state.

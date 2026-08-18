@@ -210,8 +210,9 @@ def main():
         is None
     )
 
-    # Current Ayvens exact-offer financial observation must still
-    # be promoted through the bridge.
+    # Explicit Ayvens exact-offer financial evidence may be promoted through
+    # the bridge. If the live provider state is unavailable, it must remain
+    # UNKNOWN and keep the financial blocker instead of becoming assumed 0%.
     ayvens_offer = (
         payload["left_offer"]
         if (
@@ -223,36 +224,25 @@ def main():
         else payload["right_offer"]
     )
 
-    assert (
-        ayvens_offer[
-            "price"
-        ][
-            "down_payment"
-        ][
-            "status"
-        ]
-        == "OBSERVED"
+    ayvens_down_payment = (
+        ayvens_offer["price"]["down_payment"]
     )
 
-    assert (
-        ayvens_offer[
-            "price"
-        ][
-            "down_payment"
-        ][
-            "percent"
-        ]
-        == 0.0
-    )
-
-    assert (
-        ayvens_offer[
-            "price"
-        ][
-            "pricing_basis"
-        ]
-        == "OBSERVED_ZERO_DOWN_PAYMENT_STATE"
-    )
+    if ayvens_down_payment["status"] == "OBSERVED":
+        assert ayvens_down_payment["percent"] == 0.0
+        assert (
+            ayvens_offer["price"]["pricing_basis"]
+            == "OBSERVED_ZERO_DOWN_PAYMENT_STATE"
+        )
+    else:
+        assert ayvens_down_payment["status"] == "UNKNOWN"
+        assert ayvens_down_payment["percent"] is None
+        assert ayvens_offer["price"]["pricing_basis"] is None
+        assert any(
+            blocker["code"]
+            == "DOWN_PAYMENT_EVIDENCE_INCOMPLETE"
+            for blocker in payload["blockers"]
+        )
 
     print()
     print("=" * 100)

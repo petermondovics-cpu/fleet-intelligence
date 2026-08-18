@@ -464,10 +464,13 @@ class MarketPairFullComparisonBridge:
 
             page.goto(
                 url,
-                wait_until="domcontentloaded",
+                wait_until="commit",
                 timeout=60000,
             )
-            page.wait_for_timeout(1800)
+            cls._wait_for_ayvens_priced_offer(
+                page
+            )
+            page.wait_for_timeout(300)
             cls._dismiss(page)
             return builder.build(page)
 
@@ -488,6 +491,24 @@ class MarketPairFullComparisonBridge:
 
         raise ValueError(
             f"Unsupported provider: {provider}"
+        )
+
+    @staticmethod
+    def _wait_for_ayvens_priced_offer(
+        page,
+    ):
+        # Ayvens' Vue application can return HTTP 200 while its
+        # DOMContentLoaded event remains pending. Synchronize on explicit
+        # priced-offer DOM evidence instead. This is only a readiness signal;
+        # the evidence-aware builder still validates identity, fee, duration
+        # and mileage independently.
+        price = page.locator(
+            "div.font-size-40px.font-size-40px, "
+            "div.font-size-40px.fw-500.whitespace-nowrap"
+        )
+        price.first.wait_for(
+            state="attached",
+            timeout=60000,
         )
 
     @classmethod
