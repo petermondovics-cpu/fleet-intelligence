@@ -262,6 +262,17 @@ class MarketPairFullComparisonBridge:
                     )
                 )
 
+                for provider, seconds in (
+                    contract_evidence
+                    .discovery_timings
+                ):
+                    stage_timings.append(
+                        (
+                            f"contract_evidence:{provider}",
+                            seconds,
+                        )
+                    )
+
                 financial_reviewer = (
                     FinancialEvidenceProvenanceResolverV1_1(
                         browser

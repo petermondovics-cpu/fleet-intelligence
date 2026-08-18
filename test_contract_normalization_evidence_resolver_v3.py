@@ -75,6 +75,16 @@ def main():
     assert result.selected_coordinate.mileage == 20000
     assert result.normalized_monthly_fee_left == 192312
     assert result.normalized_monthly_fee_right == 181000
+    assert tuple(
+        provider
+        for provider, seconds
+        in result.discovery_timings
+    ) == ("Arval", "Ayvens")
+    assert all(
+        seconds >= 0
+        for provider, seconds
+        in result.discovery_timings
+    )
 
     # Discovery must never reacquire an offer's already-known current
     # coordinate. A different financial UI state at the same duration and

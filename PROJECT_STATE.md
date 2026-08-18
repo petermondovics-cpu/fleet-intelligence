@@ -356,6 +356,22 @@ candidate validation or execution order. The first live collection attempt was
 blocked earlier by missing Ayvens priced-offer DOM after 61.936 seconds, so no
 task-level live timing is claimed yet.
 
+A subsequent successful Opel Combo run produced task-level acquisition timing:
+
+    acquisition total: 15.007 seconds
+    Arval FINANCIAL: 6.941 seconds
+    Ayvens FINANCIAL: 8.066 seconds
+    equipment tasks: approximately 0 seconds
+
+The same run measured Contract V3 at 78.653 seconds and Arval financial
+provenance review at 120.594 seconds. This disproves the hypothesis that the
+broad acquisition stage is the general bottleneck for non-BYD pairs.
+
+Contract V3 now also records provider-level discovery timings and exposes them
+as `contract_evidence:<provider>` stage entries. A live provider-level sample
+is still pending because the next Opel attempt failed before discovery when the
+Ayvens priced-offer DOM did not render.
+
 The historical deterministic script inventory currently reports 97 passing
 and 19 failing scripts. The failures include obsolete API/source-inspection
 expectations and two scripts that launch Chromium despite not being named as

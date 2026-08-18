@@ -29,6 +29,7 @@ def main():
 
     print("bridge_status:", result.status)
     print("bridge_diagnostic:", result.diagnostic)
+    print("stage_timings:", result.stage_timings)
 
     assert result.status == "EVALUATED"
     final = result.final_comparison

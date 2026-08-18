@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Dict, Optional, Tuple
 
 from contract_normalization.provider_contract_state_discovery_v1 import (
@@ -39,6 +40,7 @@ class ContractNormalizationEvidenceResultV3:
     common_coordinates: Tuple[CommonContractCoordinateV3, ...]
     selected_coordinate: Optional[CommonContractCoordinateV3]
     diagnostic: str
+    discovery_timings: Tuple[Tuple[str, float], ...] = ()
 
     @property
     def normalized_price_available(self):
@@ -104,13 +106,22 @@ class ContractNormalizationEvidenceResolverV3:
             if coordinate != right_current
         )
 
-        left_discovery = self.discovery.discover(
+        discovery_timings = []
+
+        left_discovery, left_seconds = self._discover_timed(
             left_offer,
-            coordinates=left_targets,
+            left_targets,
         )
-        right_discovery = self.discovery.discover(
+        discovery_timings.append(
+            (left_provider, left_seconds)
+        )
+
+        right_discovery, right_seconds = self._discover_timed(
             right_offer,
-            coordinates=right_targets,
+            right_targets,
+        )
+        discovery_timings.append(
+            (right_provider, right_seconds)
         )
 
         left = [self._current_observation(left_offer)]
@@ -135,6 +146,9 @@ class ContractNormalizationEvidenceResolverV3:
                     "promotion was used."
                 ),
                 common=common,
+                discovery_timings=(
+                    discovery_timings
+                ),
             )
 
         return ContractNormalizationEvidenceResultV3(
@@ -149,6 +163,9 @@ class ContractNormalizationEvidenceResolverV3:
             diagnostic=(
                 "Explicit common priced contract state resolved at "
                 f"{selected.duration} months / {selected.mileage} km/year."
+            ),
+            discovery_timings=tuple(
+                discovery_timings
             ),
         )
 
@@ -168,6 +185,25 @@ class ContractNormalizationEvidenceResolverV3:
             for mileage in mileages
             for duration in durations
             if 12 <= duration <= 84 and 5000 <= mileage <= 100000
+        )
+
+    def _discover_timed(
+        self,
+        offer,
+        coordinates,
+    ):
+        started = perf_counter()
+        result = self.discovery.discover(
+            offer,
+            coordinates=coordinates,
+        )
+        return (
+            result,
+            round(
+                perf_counter()
+                - started,
+                3,
+            ),
         )
 
     @staticmethod
@@ -241,8 +277,18 @@ class ContractNormalizationEvidenceResolverV3:
         return common[0] if common else None
 
     @staticmethod
-    def _unresolved(lp, rp, attempted, left, right, diagnostic, *, common=()):
+    def _unresolved(
+        lp,
+        rp,
+        attempted,
+        left,
+        right,
+        diagnostic,
+        *,
+        common=(),
+        discovery_timings=(),
+    ):
         return ContractNormalizationEvidenceResultV3(
             UNRESOLVED, lp, rp, tuple(attempted), tuple(left), tuple(right),
-            tuple(common), None, diagnostic
+            tuple(common), None, diagnostic, tuple(discovery_timings)
         )

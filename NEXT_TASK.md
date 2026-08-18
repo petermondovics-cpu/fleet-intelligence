@@ -83,11 +83,21 @@ live sampling attempt did not reach acquisition because the Ayvens priced-offer
 DOM remained absent for 61.936 seconds. Missing price DOM correctly stayed a
 load failure; repeat task-level timing only when provider rendering is healthy.
 
+A later successful Opel Combo run captured acquisition at 15.007 seconds:
+Arval financial 6.941 seconds, Ayvens financial 8.066 seconds, and equipment
+tasks approximately zero. Contract V3 took 78.653 seconds and Arval financial
+provenance took 120.594 seconds. The next priority is therefore deeper timing
+inside those two stages, not acquisition optimization.
+
+Contract V3 provider-level discovery timing is implemented, but the first live
+sample attempt was blocked earlier by intermittent Ayvens DOM non-rendering.
+
 ## Validation work
 
-1. Capture one successful live task-level acquisition timing sample when the
-   provider offer DOM is healthy, then identify the dominant connector/action.
-2. Investigate provider throttling across the sequential batch. Each pair
+1. Add safe surface timing to Arval financial provenance so exact-offer route
+   review and quote-flow navigation can be distinguished.
+2. Capture one successful Contract V3 provider-level timing sample.
+3. Investigate provider throttling across the sequential batch. Each pair
    already uses a fresh browser lifecycle, so focus on request cadence and
    provider-side behavior rather than shared browser state.
 3. Consider conservative pacing only after the responsible stage is known;
