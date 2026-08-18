@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Dict, Optional, Tuple
 
 
@@ -32,9 +33,18 @@ class EvidenceCandidate:
 
 
 @dataclass(frozen=True)
+class AcquisitionTaskTiming:
+    provider: str
+    target_dimension: str
+    action_type: str
+    seconds: float
+
+
+@dataclass(frozen=True)
 class AcquisitionExecutionResult:
     status: str
     candidates: Tuple[EvidenceCandidate, ...]
+    task_timings: Tuple[AcquisitionTaskTiming, ...] = ()
 
     @property
     def candidate_count(self) -> int:
@@ -99,11 +109,30 @@ class AcquisitionExecutor:
     ) -> AcquisitionExecutionResult:
 
         candidates = []
+        task_timings = []
 
         for task in plan.by_priority():
-            candidates.append(
-                self.execute_task(task)
-            )
+            started = perf_counter()
+
+            try:
+                candidates.append(
+                    self.execute_task(task)
+                )
+            finally:
+                task_timings.append(
+                    AcquisitionTaskTiming(
+                        provider=task.provider,
+                        target_dimension=(
+                            task.target_dimension
+                        ),
+                        action_type=task.action_type,
+                        seconds=round(
+                            perf_counter()
+                            - started,
+                            3,
+                        ),
+                    )
+                )
 
         if not candidates:
             status = EXECUTOR_READY
@@ -126,6 +155,7 @@ class AcquisitionExecutor:
         return AcquisitionExecutionResult(
             status=status,
             candidates=tuple(candidates),
+            task_timings=tuple(task_timings),
         )
 
     def execute_task(

@@ -19,6 +19,14 @@ class Task:
     message: str
 
 
+class Plan:
+    def __init__(self, tasks):
+        self.tasks = tasks
+
+    def by_priority(self):
+        return self.tasks
+
+
 def main():
 
     # ========================================================
@@ -206,6 +214,26 @@ def main():
     print(
         "TEST 5 PASSED - "
         "MISSING ACQUISITION CAPABILITY PRESERVED AS UNRESOLVED"
+    )
+
+    execution = executor.execute_plan(
+        Plan((financial_task,))
+    )
+
+    assert len(execution.task_timings) == 1
+    timing = execution.task_timings[0]
+    assert timing.provider == "Arval"
+    assert timing.target_dimension == "FINANCIAL"
+    assert (
+        timing.action_type
+        == "FIND_EXPLICIT_DOWN_PAYMENT_CONDITION"
+    )
+    assert timing.seconds >= 0
+    assert execution.candidates[0].status == "UNRESOLVED"
+
+    print(
+        "TEST 6 PASSED - ACQUISITION TASK TIMING PRESERVES "
+        "PROVIDER, DIMENSION AND ACTION"
     )
 
     print(

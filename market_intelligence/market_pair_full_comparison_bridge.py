@@ -218,6 +218,23 @@ class MarketPairFullComparisonBridge:
                     ),
                 )
 
+                for timing in (
+                    acquisition
+                    .execution
+                    .task_timings
+                ):
+                    stage_timings.append(
+                        (
+                            (
+                                "acquisition:"
+                                f"{timing.provider}:"
+                                f"{timing.target_dimension}:"
+                                f"{timing.action_type}"
+                            ),
+                            timing.seconds,
+                        )
+                    )
+
                 enrichment = (
                     self._measure(
                         stage_timings,

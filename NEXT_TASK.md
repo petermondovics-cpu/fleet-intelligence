@@ -78,10 +78,15 @@ HTTP commit. A headed ATTO 2 run completed with Ayvens load at 25.413 seconds
 and the full bridge EVALUATED. The main measured bottleneck was acquisition at
 209.608 seconds; Contract V3 took 42.369 seconds. No evidence semantics changed.
 
+Provider/dimension/action acquisition timing is now implemented. An initial
+live sampling attempt did not reach acquisition because the Ayvens priced-offer
+DOM remained absent for 61.936 seconds. Missing price DOM correctly stayed a
+load failure; repeat task-level timing only when provider rendering is healthy.
+
 ## Validation work
 
-1. Split the broad acquisition timing into service, financial and optional
-   manufacturer sub-stages without changing acquisition results.
+1. Capture one successful live task-level acquisition timing sample when the
+   provider offer DOM is healthy, then identify the dominant connector/action.
 2. Investigate provider throttling across the sequential batch. Each pair
    already uses a fresh browser lifecycle, so focus on request cadence and
    provider-side behavior rather than shared browser state.

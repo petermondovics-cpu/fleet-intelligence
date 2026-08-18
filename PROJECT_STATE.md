@@ -349,6 +349,13 @@ The current live bottleneck has therefore moved from initial Ayvens loading to
 the broad acquisition stage. Down-payment evidence was unavailable in this run
 and correctly remained UNKNOWN with DOWN_PAYMENT_EVIDENCE_INCOMPLETE.
 
+AcquisitionExecutor now records structured task timings by provider, target
+dimension and action. The bridge exposes these as
+`acquisition:<provider>:<dimension>:<action>` timing entries without changing
+candidate validation or execution order. The first live collection attempt was
+blocked earlier by missing Ayvens priced-offer DOM after 61.936 seconds, so no
+task-level live timing is claimed yet.
+
 The historical deterministic script inventory currently reports 97 passing
 and 19 failing scripts. The failures include obsolete API/source-inspection
 expectations and two scripts that launch Chromium despite not being named as
