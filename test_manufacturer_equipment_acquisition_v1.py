@@ -130,6 +130,33 @@ def main():
         "TEST 4 PASSED - DIFFERENT MODEL YEAR IS REJECTED"
     )
 
+    def unavailable_manufacturer(task, offer):
+        raise TimeoutError(
+            "official manufacturer page timed out"
+        )
+
+    engine = ManufacturerEquipmentAcquisition(
+        canonical_identity_builder=identity,
+        manufacturer_discovery=unavailable_manufacturer,
+    )
+
+    r = engine.acquire(
+        None,
+        offer,
+        "NOT_PUBLISHED",
+    )
+
+    assert r.status == "UNRESOLVED"
+    assert r.provider_equipment_status == "NOT_PUBLISHED"
+    assert r.manufacturer_equipment_status == "UNRESOLVED"
+    assert "TimeoutError" in r.diagnostic
+    assert r.equipment == ()
+
+    print(
+        "TEST 5 PASSED - MANUFACTURER LOAD FAILURE REMAINS "
+        "UNRESOLVED WITHOUT ABORTING THE COMPARISON"
+    )
+
     print(
         "\nALL MANUFACTURER EQUIPMENT ACQUISITION V1 TESTS PASSED"
     )

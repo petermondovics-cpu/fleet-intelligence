@@ -98,7 +98,20 @@ class ManufacturerEquipmentAcquisition:
                 "No manufacturer equipment discovery callback configured.",
             )
 
-        candidate = self.manufacturer_discovery(task, offer)
+        try:
+            candidate = self.manufacturer_discovery(
+                task,
+                offer,
+            )
+        except Exception as exc:
+            return self._unresolved(
+                provider_equipment_status,
+                (
+                    "Manufacturer equipment discovery failed; provider "
+                    "evidence remains unchanged and manufacturer evidence "
+                    f"remains unresolved: {type(exc).__name__}: {exc}"
+                ),
+            )
 
         if not candidate:
             return self._unresolved(

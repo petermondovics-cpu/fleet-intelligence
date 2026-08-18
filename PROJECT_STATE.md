@@ -114,6 +114,21 @@ Ayvens trim/API acquisition. The retry did not improve batch reliability and
 was fully reverted. Run 10 is retained as diagnostic evidence that blind
 per-navigation retry is not a root-cause fix and may add provider load.
 
+Run 10 also exposed a separate isolation defect: an exception from optional
+BYD manufacturer equipment discovery could escape the acquisition layer and
+abort the whole pair as BRIDGE_EXCEPTION. Manufacturer discovery exceptions
+are now converted to explicit UNRESOLVED manufacturer equipment evidence.
+Provider evidence remains unchanged and the comparison continues with its
+equipment blocker intact.
+
+A normal headed ATTO 2 bridge run (including manufacturer acquisition) passed
+after this change:
+
+    bridge_status: EVALUATED
+    comparison_status: INSUFFICIENT_EVIDENCE
+    price_comparison_allowed: False
+    price_winner: None
+
 The system is intentionally refusing to rank prices while these blockers remain.
 
 ---
@@ -298,9 +313,11 @@ Targeted headed live bridge tests currently pass for:
 All three retained the current advertised Ayvens state and correctly remained
 EVIDENCE_UNRESOLVED because no explicit common priced coordinate was found.
 
-The next priorities are to diagnose batch-level live-load behavior (request
-pacing, browser/session lifecycle and optional manufacturer acquisition)
-without weakening evidence rules, and separately triage historical test debt.
+The next priorities are to diagnose batch-level live-load behavior (provider
+request pacing and throttling) without weakening evidence rules, and separately
+triage historical test debt. Browser lifecycle has been checked: each pair
+already receives a fresh Playwright/browser lifecycle. Optional manufacturer
+failure is now isolated from core comparison completion.
 
 The historical deterministic script inventory currently reports 97 passing
 and 19 failing scripts. The failures include obsolete API/source-inspection

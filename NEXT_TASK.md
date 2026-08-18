@@ -61,18 +61,23 @@ and 5 failed pairs. Failures spanned provider offer loading, BYD manufacturer
 acquisition and Ayvens trim/API acquisition. The retry implementation was
 therefore rejected and fully reverted.
 
+Run 10 also revealed that optional BYD manufacturer discovery exceptions could
+abort an otherwise valid pair. This has been fixed: discovery exceptions now
+produce UNRESOLVED manufacturer evidence, preserve the provider evidence, and
+leave the equipment blocker in place. A normal headed ATTO 2 bridge run passed
+with INSUFFICIENT_EVIDENCE and no price winner.
+
 ## Validation work
 
 1. Instrument pair/provider/stage timing without changing acquisition results.
-2. Compare fresh-browser-per-pair behavior with the current sequential batch
-   lifecycle and identify provider throttling or resource leakage.
-3. Isolate optional manufacturer acquisition from core offer/contract loading
-   in benchmark diagnostics.
-4. Consider conservative pacing only after the responsible stage is known;
+2. Investigate provider throttling across the sequential batch. Each pair
+   already uses a fresh browser lifecycle, so focus on request cadence and
+   provider-side behavior rather than shared browser state.
+3. Consider conservative pacing only after the responsible stage is known;
    do not add blind per-navigation retries.
-5. Separately classify the historical deterministic suite's 19 failures into
+4. Separately classify the historical deterministic suite's 19 failures into
    obsolete tests, mislabeled live tests, and current behavior regressions.
-6. Modernize those tests in a separate focused patch; do not mix broad test
+5. Modernize those tests in a separate focused patch; do not mix broad test
    cleanup into the Contract V3 change.
 
 ## Safety constraints
