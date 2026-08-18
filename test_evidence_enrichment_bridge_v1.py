@@ -4,6 +4,7 @@ from comparison.acquisition_executor import (
     EvidenceCandidate,
 )
 from comparison.evidence_enrichment_bridge import EvidenceEnrichmentBridge
+from models.financial_conditions import ServicePackage
 
 
 @dataclass
@@ -19,6 +20,7 @@ class Composite:
     provider: str
     vehicle: Vehicle
     offer: Offer
+    services: ServicePackage
 
 @dataclass
 class EquipmentEvidence:
@@ -38,7 +40,12 @@ class EndToEnd:
 
 def side(provider, std, opt, items=(), fully=False):
     return Side(
-        Composite(provider, Vehicle(tuple(items)), Offer("https://example.test")),
+        Composite(
+            provider,
+            Vehicle(tuple(items)),
+            Offer("https://example.test"),
+            ServicePackage(),
+        ),
         EquipmentEvidence(std, opt, fully),
     )
 

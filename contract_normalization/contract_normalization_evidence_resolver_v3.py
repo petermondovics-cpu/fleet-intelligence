@@ -80,13 +80,37 @@ class ContractNormalizationEvidenceResolverV3:
 
         attempted = self._candidate_coordinates(left_offer, right_offer)
 
+        # The freshly loaded exact offer is already the authoritative current
+        # advertised observation. Discovery is for alternative coordinates;
+        # re-observing the current coordinate can introduce a different
+        # financial UI state and incorrectly invalidate the known current
+        # price as a coordinate conflict.
+        left_current = (
+            int(left_offer.duration),
+            int(left_offer.mileage),
+        )
+        right_current = (
+            int(right_offer.duration),
+            int(right_offer.mileage),
+        )
+        left_targets = tuple(
+            coordinate
+            for coordinate in attempted
+            if coordinate != left_current
+        )
+        right_targets = tuple(
+            coordinate
+            for coordinate in attempted
+            if coordinate != right_current
+        )
+
         left_discovery = self.discovery.discover(
             left_offer,
-            coordinates=attempted,
+            coordinates=left_targets,
         )
         right_discovery = self.discovery.discover(
             right_offer,
-            coordinates=attempted,
+            coordinates=right_targets,
         )
 
         left = [self._current_observation(left_offer)]

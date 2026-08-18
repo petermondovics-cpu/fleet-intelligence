@@ -46,6 +46,33 @@ class Connector:
         }
 
 
+class RecordingExecutor:
+    def __init__(self):
+        self.tasks = None
+
+    def execute_plan(self, plan):
+        self.tasks = plan.by_priority()
+        return "EXECUTION"
+
+
+class FixedPlan:
+    status = "ACQUISITION_PLAN_READY"
+
+    def __init__(self, tasks):
+        self.tasks = tasks
+
+    def by_priority(self):
+        return self.tasks
+
+
+class FixedPlanner:
+    def __init__(self, tasks):
+        self.tasks = tasks
+
+    def plan(self, full_comparison_result, left, right):
+        return FixedPlan(self.tasks)
+
+
 def main():
 
     left = Side(
@@ -140,6 +167,48 @@ def main():
     print(
         "TEST 2 PASSED - "
         "TASKS ROUTE TO CORRECT PROVIDER CONNECTOR"
+    )
+
+    service_task = Task(
+        provider="Arval",
+        action_type="X",
+        target_dimension="SERVICES",
+        priority=20,
+        blocker_code="X",
+        strategy="X",
+        allowed_sources=(),
+        prohibited_sources=(),
+        canonical_vehicle_key="BYD|ATTO 2|PHEV",
+        message="",
+    )
+
+    filtered_router = ProviderAcquisitionRouter(
+        arval_connector=Connector(),
+        ayvens_connector=Connector(),
+        excluded_dimensions=("contract",),
+    )
+    filtered_router.planner = FixedPlanner(
+        (arval_task, ayvens_task, service_task)
+    )
+    filtered_router.executor = RecordingExecutor()
+
+    acquisition = filtered_router.execute(
+        object(),
+        left,
+        right,
+    )
+
+    assert acquisition.plan_status == "ACQUISITION_PLAN_READY"
+    assert acquisition.task_count == 1
+    assert acquisition.execution == "EXECUTION"
+    assert tuple(
+        task.target_dimension
+        for task in filtered_router.executor.tasks
+    ) == ("SERVICES",)
+
+    print(
+        "TEST 3 PASSED - OPT-IN DIMENSION FILTER SKIPS CONTRACT "
+        "ACQUISITION WITHOUT AFFECTING OTHER TASKS"
     )
 
     print(

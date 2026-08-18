@@ -1,4 +1,5 @@
 import re
+from urllib.parse import urlsplit
 
 from playwright.sync_api import Page
 
@@ -14,6 +15,8 @@ class AyvensVehicleIdentityParser:
 
     This parser is evidence-first and uses only page text / URL structure.
     """
+
+    API_ROOT = "https://autotartosberlet.ayvens.com/api/cars"
 
     def parse_brand(
         self,
@@ -120,20 +123,80 @@ class AyvensVehicleIdentityParser:
             "div.font-size-18px.fw-400.font-source.color-blue"
         )
 
-        if locator.count() == 0:
-            raise ValueError(
-                "Ayvens trim/version text not found."
+        if locator.count() > 0:
+            trim = (
+                locator.first
+                .inner_text()
+                .strip()
             )
 
-        trim = (
-            locator.first
-            .inner_text()
-            .strip()
+            if trim:
+                return trim
+
+        trim = self._parse_api_configuration(page)
+
+        if trim:
+            return trim
+
+        raise ValueError(
+            "Ayvens trim/version text not found in the exact-offer "
+            "DOM or explicit provider API configuration."
         )
 
-        if not trim:
-            raise ValueError(
-                "Ayvens trim/version text is empty."
+    def _parse_api_configuration(
+        self,
+        page: Page,
+    ) -> str | None:
+        api_url = self._api_url_from_offer(page.url)
+
+        if api_url is None:
+            return None
+
+        try:
+            response = page.request.get(
+                api_url,
+                timeout=60000,
             )
 
-        return trim
+            if not response.ok:
+                return None
+
+            payload = response.json()
+        except Exception:
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+
+        data = payload.get("data")
+
+        if not isinstance(data, dict):
+            return None
+
+        configuration = data.get("configuration")
+
+        if not isinstance(configuration, str):
+            return None
+
+        return configuration.strip() or None
+
+    @classmethod
+    def _api_url_from_offer(
+        cls,
+        url: str,
+    ) -> str | None:
+        parsed = urlsplit(url or "")
+
+        if parsed.hostname != "autotartosberlet.ayvens.com":
+            return None
+
+        parts = tuple(
+            part
+            for part in parsed.path.split("/")
+            if part
+        )
+
+        if len(parts) != 2:
+            return None
+
+        return f"{cls.API_ROOT}/{parts[0]}/{parts[1]}"

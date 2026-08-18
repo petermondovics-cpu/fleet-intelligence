@@ -42,9 +42,11 @@ def main():
     # --------------------------------------------------------
 
     assert (
-        "ContractNormalizationEvidenceResolverV2"
+        "ContractNormalizationEvidenceResolverV3"
         in bridge
     )
+
+    assert 'excluded_dimensions=("CONTRACT",)' in bridge
 
     assert (
         "contract_evidence=contract_evidence"

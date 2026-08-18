@@ -29,11 +29,22 @@ class EndToEndAcquisitionResult:
     execution: AcquisitionExecutionResult
 
 class ProviderAcquisitionRouter:
-    def __init__(self, *, arval_connector, ayvens_connector, manufacturer_equipment=None):
+    def __init__(
+        self,
+        *,
+        arval_connector,
+        ayvens_connector,
+        manufacturer_equipment=None,
+        excluded_dimensions: Tuple[str, ...] = (),
+    ):
         self.planner = EvidenceAcquisitionOrchestrator()
         self.arval = arval_connector
         self.ayvens = ayvens_connector
         self.manufacturer_equipment = manufacturer_equipment
+        self.excluded_dimensions = frozenset(
+            str(item).strip().upper()
+            for item in excluded_dimensions
+        )
         self._left = None
         self._right = None
         self.executor = AcquisitionExecutor(
@@ -46,7 +57,12 @@ class ProviderAcquisitionRouter:
     def execute(self, full_comparison_result, left, right):
         self._left, self._right = left, right
         plan = self.planner.plan(full_comparison_result, left, right)
-        routed_tasks = tuple(self._route_task(task, left, right) for task in plan.by_priority())
+        routed_tasks = tuple(
+            self._route_task(task, left, right)
+            for task in plan.by_priority()
+            if task.target_dimension.strip().upper()
+            not in self.excluded_dimensions
+        )
         execution = self.executor.execute_plan(_RoutedPlan(tasks=routed_tasks))
         return EndToEndAcquisitionResult(plan.status, len(routed_tasks), execution)
 

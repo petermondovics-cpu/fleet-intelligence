@@ -182,6 +182,11 @@ class MarketPairFullComparisonBridge:
                         )
                     ),
                     manufacturer_equipment=manufacturer,
+                    # Contract normalization is performed immediately below
+                    # by the authoritative V3 resolver. Its explicit priced
+                    # observations, not legacy acquisition candidates, feed
+                    # the final comparison.
+                    excluded_dimensions=("CONTRACT",),
                 )
 
                 acquisition = router.execute(
