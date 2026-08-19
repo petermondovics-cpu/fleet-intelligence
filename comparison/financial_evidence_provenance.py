@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Optional, Tuple
 from urllib.parse import urljoin, urlsplit
 
@@ -24,6 +25,7 @@ class FinancialEvidenceReview:
     down_payment_percent: Optional[float]
     down_payment_amount_huf: Optional[int]
     diagnostic: str
+    surface_timings: Tuple[Tuple[str, float], ...] = ()
 
 
 class FinancialEvidenceProvenanceResolverV1_1:
@@ -175,16 +177,18 @@ class FinancialEvidenceProvenanceResolverV1_1:
 
         page = self.browser.new_page()
         reviewed = []
+        surface_timings = []
 
         try:
-            route = (
-                ArvalOfferRouteResolver()
-                .resolve(
+            route = self._measure_surface(
+                surface_timings,
+                "EXACT_OFFER_ROUTE",
+                lambda: ArvalOfferRouteResolver().resolve(
                     page,
                     url,
                     timeout=60000,
                     settle_ms=1500,
-                )
+                ),
             )
 
             if (
@@ -198,19 +202,22 @@ class FinancialEvidenceProvenanceResolverV1_1:
                         "Arval exact-offer route could not be validated; "
                         "financial publication state remains unresolved."
                     ),
+                    surface_timings,
                 )
 
             reviewed.append(
                 "EXACT_OFFER"
             )
 
-            exact_parsed = self._parse(
-                self._body(
-                    page
-                )
-            )
+            exact_review_started = perf_counter()
+            exact_parsed = self._parse(self._body(page))
 
             if exact_parsed is not None:
+                self._append_timing(
+                    surface_timings,
+                    "EXACT_OFFER_REVIEW",
+                    exact_review_started,
+                )
                 return self._observed(
                     page.url,
                     reviewed,
@@ -219,6 +226,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
                         "Explicit down-payment evidence was observed on "
                         "the Arval exact-offer page."
                     ),
+                    surface_timings,
                 )
 
             quote_target = (
@@ -226,6 +234,11 @@ class FinancialEvidenceProvenanceResolverV1_1:
                     page,
                     route.resolved_url,
                 )
+            )
+            self._append_timing(
+                surface_timings,
+                "EXACT_OFFER_REVIEW",
+                exact_review_started,
             )
 
             if quote_target is None:
@@ -243,20 +256,17 @@ class FinancialEvidenceProvenanceResolverV1_1:
                         "down-payment condition was published. No safe "
                         "provider-owned quote-flow target was exposed."
                     ),
+                    surface_timings=tuple(surface_timings),
                 )
 
             quote_url = (
                 quote_target["url"]
             )
 
-            response = page.goto(
-                quote_url,
-                wait_until="domcontentloaded",
-                timeout=60000,
-            )
-
-            page.wait_for_timeout(
-                1500
+            response = self._measure_surface(
+                surface_timings,
+                "QUOTE_FLOW_NAVIGATION",
+                lambda: self._navigate_quote_flow(page, quote_url),
             )
 
             status = (
@@ -277,6 +287,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
                         "Arval quote-flow target was provider-owned but did "
                         f"not return HTTP 2xx. HTTP={status}."
                     ),
+                    surface_timings,
                 )
 
             if not self._is_arval_url(
@@ -289,6 +300,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
                         "Quote-flow navigation left the Arval domain; "
                         "review was stopped."
                     ),
+                    surface_timings,
                 )
 
             if not self._quote_flow_reached(
@@ -302,6 +314,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
                         "Provider-owned quote-flow target loaded, but a "
                         "quote-request surface could not be safely verified."
                     ),
+                    surface_timings,
                 )
 
             reviewed.append(
@@ -323,6 +336,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
                         "Explicit down-payment evidence was observed on "
                         "the Arval quote-flow page."
                     ),
+                    surface_timings,
                 )
 
             return FinancialEvidenceReview(
@@ -340,6 +354,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
                     "amount, or zero-down statement was published. "
                     "Down payment remains UNKNOWN."
                 ),
+                surface_timings=tuple(surface_timings),
             )
 
         except Exception as exc:
@@ -350,10 +365,39 @@ class FinancialEvidenceProvenanceResolverV1_1:
                     "Arval financial publication review failed safely: "
                     f"{type(exc).__name__}: {exc}"
                 ),
+                surface_timings,
             )
 
         finally:
             page.close()
+
+    @staticmethod
+    def _navigate_quote_flow(page, quote_url):
+        response = page.goto(
+            quote_url,
+            wait_until="domcontentloaded",
+            timeout=60000,
+        )
+        page.wait_for_timeout(1500)
+        return response
+
+    @staticmethod
+    def _measure_surface(surface_timings, label, action):
+        started = perf_counter()
+        try:
+            return action()
+        finally:
+            FinancialEvidenceProvenanceResolverV1_1._append_timing(
+                surface_timings,
+                label,
+                started,
+            )
+
+    @staticmethod
+    def _append_timing(surface_timings, label, started):
+        surface_timings.append(
+            (label, round(perf_counter() - started, 3))
+        )
 
     @classmethod
     def _quote_target(
@@ -586,6 +630,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
         reviewed,
         parsed,
         diagnostic,
+        surface_timings=(),
     ):
         percent, amount = parsed
 
@@ -599,6 +644,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
             down_payment_percent=percent,
             down_payment_amount_huf=amount,
             diagnostic=diagnostic,
+            surface_timings=tuple(surface_timings),
         )
 
     @staticmethod
@@ -606,6 +652,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
         source_url,
         reviewed,
         diagnostic,
+        surface_timings=(),
     ):
         return FinancialEvidenceReview(
             provider="Arval",
@@ -617,6 +664,7 @@ class FinancialEvidenceProvenanceResolverV1_1:
             down_payment_percent=None,
             down_payment_amount_huf=None,
             diagnostic=diagnostic,
+            surface_timings=tuple(surface_timings),
         )
 
 

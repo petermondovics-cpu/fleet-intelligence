@@ -291,6 +291,20 @@ class MarketPairFullComparisonBridge:
                     )
                 )
 
+                for surface, seconds in (
+                    getattr(
+                        left_financial_review,
+                        "surface_timings",
+                        (),
+                    )
+                ):
+                    stage_timings.append(
+                        (
+                            f"financial_review_left:{surface}",
+                            seconds,
+                        )
+                    )
+
                 right_financial_review = (
                     self._measure(
                         stage_timings,
@@ -302,6 +316,20 @@ class MarketPairFullComparisonBridge:
                         ),
                     )
                 )
+
+                for surface, seconds in (
+                    getattr(
+                        right_financial_review,
+                        "surface_timings",
+                        (),
+                    )
+                ):
+                    stage_timings.append(
+                        (
+                            f"financial_review_right:{surface}",
+                            seconds,
+                        )
+                    )
 
                 final = (
                     self._measure(

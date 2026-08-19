@@ -17,7 +17,7 @@ Python environment:
     Python 3.12
 
 This document includes the current uncommitted validation state as of
-2026-08-18.
+2026-08-19.
 
 ---
 
@@ -130,6 +130,30 @@ after this change:
     price_winner: None
 
 The system is intentionally refusing to rank prices while these blockers remain.
+
+---
+
+## Current live stage timing
+
+A successful headed BYD ATTO 2 bridge run on 2026-08-19 captured both provider
+contract-discovery and Arval financial-review surface timings:
+
+    contract_evidence: 33.465 seconds
+        Arval: 8.128 seconds
+        Ayvens: 25.336 seconds
+
+    financial_review_left (Arval): 8.939 seconds
+        exact-offer route: 2.366 seconds
+        exact-offer review: 0.008 seconds
+        quote-flow navigation: 5.642 seconds
+
+The previously observed 120.594-second Arval financial review was therefore not
+reproduced on a healthy run. The new timing distinguishes whether a future slow
+review is caused by exact-offer route validation or quote-flow navigation.
+
+The run retained the explicit current Ayvens observation at 48 months / 20,000
+km/year / 189,990 HUF per month. No common explicit priced coordinate was found,
+so the comparison correctly remained INSUFFICIENT_EVIDENCE with no price winner.
 
 ---
 

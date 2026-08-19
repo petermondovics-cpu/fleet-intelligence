@@ -1,8 +1,10 @@
 from types import SimpleNamespace
 
+import comparison.financial_evidence_provenance as provenance_module
 from comparison.financial_evidence_provenance import (
     FINANCIAL_OBSERVED,
     FINANCIAL_REVIEWED_NOT_PUBLISHED,
+    FINANCIAL_UNRESOLVED,
     FinancialEvidenceProvenanceResolverV1_1,
 )
 from models.financial_conditions import (
@@ -56,6 +58,7 @@ def main():
         observed.down_payment_percent
         == 0
     )
+    assert observed.surface_timings == ()
 
     print(
         "TEST 1 PASSED - EXISTING EXPLICIT 0% "
@@ -120,6 +123,67 @@ def main():
         FINANCIAL_REVIEWED_NOT_PUBLISHED
         != FINANCIAL_OBSERVED
     )
+
+    timings = []
+    result = resolver._measure_surface(
+        timings,
+        "EXACT_OFFER_ROUTE",
+        lambda: "ok",
+    )
+    assert result == "ok"
+    assert timings[0][0] == "EXACT_OFFER_ROUTE"
+    assert timings[0][1] >= 0
+
+    failed_timings = []
+    try:
+        resolver._measure_surface(
+            failed_timings,
+            "QUOTE_FLOW_NAVIGATION",
+            lambda: (_ for _ in ()).throw(RuntimeError("expected")),
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("Expected timing action to raise.")
+    assert failed_timings[0][0] == "QUOTE_FLOW_NAVIGATION"
+    assert failed_timings[0][1] >= 0
+
+    class FakePage:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    class FakeBrowser:
+        def __init__(self):
+            self.page = FakePage()
+
+        def new_page(self):
+            return self.page
+
+    class UnresolvedRouteResolver:
+        def resolve(self, *args, **kwargs):
+            return SimpleNamespace(status="UNRESOLVED", resolved_url=None)
+
+    original_route_resolver = provenance_module.ArvalOfferRouteResolver
+    fake_browser = FakeBrowser()
+    provenance_module.ArvalOfferRouteResolver = UnresolvedRouteResolver
+    try:
+        unresolved = FinancialEvidenceProvenanceResolverV1_1(
+            fake_browser
+        ).resolve(
+            "Arval",
+            "https://www.arval.hu/exact-offer",
+            financial("UNKNOWN"),
+        )
+    finally:
+        provenance_module.ArvalOfferRouteResolver = original_route_resolver
+
+    assert unresolved.status == FINANCIAL_UNRESOLVED
+    assert unresolved.surface_timings[0][0] == "EXACT_OFFER_ROUTE"
+    assert unresolved.surface_timings[0][1] >= 0
+    assert fake_browser.page.closed is True
 
     print(
         "TEST 5 PASSED - REVIEWED_NOT_PUBLISHED "

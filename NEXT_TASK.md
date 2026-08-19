@@ -89,22 +89,26 @@ tasks approximately zero. Contract V3 took 78.653 seconds and Arval financial
 provenance took 120.594 seconds. The next priority is therefore deeper timing
 inside those two stages, not acquisition optimization.
 
-Contract V3 provider-level discovery timing is implemented, but the first live
-sample attempt was blocked earlier by intermittent Ayvens DOM non-rendering.
+Contract V3 provider-level discovery timing is implemented. A successful headed
+ATTO 2 sample measured 33.465 seconds total: Arval 8.128 seconds and Ayvens
+25.336 seconds.
+
+Arval financial provenance surface timing is also implemented. The same run
+measured 8.939 seconds total: exact-offer route validation 2.366 seconds,
+exact-offer review 0.008 seconds and quote-flow navigation 5.642 seconds. The
+earlier 120.594-second review was not reproduced; future slow samples can now be
+assigned to the responsible surface without changing evidence semantics.
 
 ## Validation work
 
-1. Add safe surface timing to Arval financial provenance so exact-offer route
-   review and quote-flow navigation can be distinguished.
-2. Capture one successful Contract V3 provider-level timing sample.
-3. Investigate provider throttling across the sequential batch. Each pair
+1. Investigate provider throttling across the sequential batch. Each pair
    already uses a fresh browser lifecycle, so focus on request cadence and
    provider-side behavior rather than shared browser state.
-3. Consider conservative pacing only after the responsible stage is known;
+2. Consider conservative pacing only after the responsible stage is known;
    do not add blind per-navigation retries.
-4. Separately classify the historical deterministic suite's 19 failures into
+3. Separately classify the historical deterministic suite's 19 failures into
    obsolete tests, mislabeled live tests, and current behavior regressions.
-5. Modernize those tests in a separate focused patch; do not mix broad test
+4. Modernize those tests in a separate focused patch; do not mix broad test
    cleanup into the Contract V3 change.
 
 ## Safety constraints
