@@ -99,13 +99,31 @@ exact-offer review 0.008 seconds and quote-flow navigation 5.642 seconds. The
 earlier 120.594-second review was not reproduced; future slow samples can now be
 assigned to the responsible surface without changing evidence semantics.
 
+Full-market run 11 completed PARTIAL with 3/5 evaluated and no price-comparable
+pairs. Two middle BYD pairs failed on different providers' initial loads, while
+both later Opel pairs evaluated and the final Arval initial load was fast. This
+does not support simple monotonic provider throttling across the batch.
+
+Run 11 isolated a separate root cause: four ATTO 2 equipment tasks each repeated
+the same approximately 61.6-second BYD manufacturer fallback, producing a
+312.201-second acquisition stage. Per-execution exact-identity caching now avoids
+repeating that discovery while preserving an independent candidate and evidence
+status for every task. Deterministic coverage passes. A post-fix live ATTO 2 run
+did not require manufacturer fallback on that render, so live reduction under
+the run 11 provider state remains to be sampled.
+
+The post-fix ATTO 2 run captured an 86.405-second Arval financial review:
+exact-offer route 23.678 seconds, exact-offer review 0.018 seconds and quote-flow
+navigation 60.043 seconds. This attributes the reproduced slow review to
+provider-owned quote-flow navigation rather than parsing.
+
 ## Validation work
 
-1. Investigate provider throttling across the sequential batch. Each pair
-   already uses a fresh browser lifecycle, so focus on request cadence and
-   provider-side behavior rather than shared browser state.
-2. Consider conservative pacing only after the responsible stage is known;
-   do not add blind per-navigation retries.
+1. Capture a live BYD manufacturer-fallback sample when provider equipment is
+   explicitly NOT_PUBLISHED, confirming the per-execution cache removes repeat
+   navigation without changing task evidence results.
+2. Treat Arval quote-flow timeout as provider/live behavior unless repeated
+   samples identify a deterministic navigation defect. Do not retry blindly.
 3. Separately classify the historical deterministic suite's 19 failures into
    obsolete tests, mislabeled live tests, and current behavior regressions.
 4. Modernize those tests in a separate focused patch; do not mix broad test

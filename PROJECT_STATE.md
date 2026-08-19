@@ -155,6 +155,37 @@ The run retained the explicit current Ayvens observation at 48 months / 20,000
 km/year / 189,990 HUF per month. No common explicit priced coordinate was found,
 so the comparison correctly remained INSUFFICIENT_EVIDENCE with no price winner.
 
+A subsequent full-market run was persisted as run 11:
+
+    status: PARTIAL
+    candidate_count: 5
+    evaluated_count: 3
+    failed_count: 2
+    price_comparable_count: 0
+
+ATTO 2 evaluated, both Opel pairs evaluated, while SEAL U failed on Ayvens
+initial load and SEALION 7 failed on Arval initial load. Because both later Opel
+pairs completed and the final Opel Arval load took only 8.283 seconds, this run
+does not support a simple monotonic batch-throttling explanation.
+
+Run 11 did expose repeated BYD manufacturer acquisition. Four equipment tasks
+each spent approximately 61.6 seconds in the same manufacturer fallback path,
+contributing to a 312.201-second acquisition stage. Manufacturer equipment
+discovery is now cached only within one acquisition execution and only for the
+same exact offer identity and provider publication status. Each task retains its
+own validated/unresolved candidate; no evidence status is promoted by the cache.
+
+The first post-fix targeted ATTO 2 live run evaluated successfully, but its
+provider equipment state did not require the live manufacturer fallback, so all
+four equipment tasks were already 0.0 seconds. The deterministic regression
+therefore proves deduplication; another live fallback sample is still needed to
+quantify the reduction under the same provider state as run 11.
+
+That targeted run also reproduced a slow Arval financial review at 86.405
+seconds. Surface timing assigned 23.678 seconds to exact-offer route validation,
+0.018 seconds to exact-offer review and 60.043 seconds to quote-flow navigation.
+The slow path is therefore provider-owned quote-flow navigation, not parsing.
+
 ---
 
 ## Current benchmark pairs

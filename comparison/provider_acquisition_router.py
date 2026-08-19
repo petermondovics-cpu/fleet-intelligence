@@ -47,6 +47,7 @@ class ProviderAcquisitionRouter:
         )
         self._left = None
         self._right = None
+        self._manufacturer_equipment_cache = {}
         self.executor = AcquisitionExecutor(
             contract_discovery=self._contract_discovery,
             service_discovery=self._service_discovery,
@@ -56,6 +57,11 @@ class ProviderAcquisitionRouter:
 
     def execute(self, full_comparison_result, left, right):
         self._left, self._right = left, right
+        # The plan may contain multiple equipment actions for the same exact
+        # derivative. Manufacturer discovery is evidence acquisition, not a
+        # task-specific operation, so perform it at most once per exact offer
+        # identity and provider publication state during this execution.
+        self._manufacturer_equipment_cache = {}
         plan = self.planner.plan(full_comparison_result, left, right)
         routed_tasks = tuple(
             self._route_task(task, left, right)
@@ -133,9 +139,19 @@ class ProviderAcquisitionRouter:
             return None
         offer = side.composite.offer
         provider_status = self._provider_equipment_status(side)
-        result = self.manufacturer_equipment.acquire(
-            task=task, offer=offer, provider_equipment_status=provider_status
+        cache_key = self._manufacturer_cache_key(
+            offer,
+            provider_status,
         )
+        if cache_key not in self._manufacturer_equipment_cache:
+            self._manufacturer_equipment_cache[cache_key] = (
+                self.manufacturer_equipment.acquire(
+                    task=task,
+                    offer=offer,
+                    provider_equipment_status=provider_status,
+                )
+            )
+        result = self._manufacturer_equipment_cache[cache_key]
         if result.status != "VALIDATED":
             return None
         return {
@@ -153,6 +169,21 @@ class ProviderAcquisitionRouter:
             "manufacturer_equipment_status": result.manufacturer_equipment_status,
             "evidence_owner": "MANUFACTURER",
         }
+
+    @staticmethod
+    def _manufacturer_cache_key(offer, provider_status):
+        identity = tuple(
+            str(getattr(offer, field, "") or "").strip().casefold()
+            for field in ("brand", "model", "trim", "fuel_type")
+        )
+        # Older/custom offer DTOs may not expose identity fields. Keep those
+        # isolated by exact URL rather than accidentally sharing evidence.
+        fallback_url = (
+            ""
+            if all(identity)
+            else str(getattr(offer, "url", "") or "").strip()
+        )
+        return identity, str(provider_status), fallback_url
 
     @staticmethod
     def _provider_equipment_status(side):

@@ -55,6 +55,32 @@ class RecordingExecutor:
         return "EXECUTION"
 
 
+class RecordingManufacturerAcquisition:
+    def __init__(self, status="UNRESOLVED"):
+        self.calls = []
+        self.status = status
+
+    def acquire(self, task, offer, provider_equipment_status):
+        self.calls.append((task, offer, provider_equipment_status))
+        return type(
+            "ManufacturerResult",
+            (),
+            {
+                "status": self.status,
+                "source_type": None,
+                "source_url": None,
+                "source_text": None,
+                "brand": None,
+                "model": None,
+                "trim": None,
+                "fuel_type": None,
+                "equipment": (),
+                "provider_equipment_status": provider_equipment_status,
+                "manufacturer_equipment_status": "UNRESOLVED",
+            },
+        )()
+
+
 class FixedPlan:
     status = "ACQUISITION_PLAN_READY"
 
@@ -209,6 +235,56 @@ def main():
     print(
         "TEST 3 PASSED - OPT-IN DIMENSION FILTER SKIPS CONTRACT "
         "ACQUISITION WITHOUT AFFECTING OTHER TASKS"
+    )
+
+    equipment_a = Task(
+        provider="Arval",
+        action_type="FIND_EQUIPMENT_SPECIFICATION_SOURCE",
+        target_dimension="EQUIPMENT",
+        priority=20,
+        blocker_code="EQUIPMENT_EVIDENCE_INCOMPLETE",
+        strategy="X",
+        allowed_sources=(),
+        prohibited_sources=(),
+        canonical_vehicle_key="BYD|ATTO 2|PHEV",
+        message="",
+    )
+    equipment_b = Task(
+        provider="Arval",
+        action_type="VERIFY_VARIANT_EQUIVALENCE",
+        target_dimension="EQUIPMENT",
+        priority=30,
+        blocker_code="VARIANT_EQUIVALENCE_EVIDENCE_INCOMPLETE",
+        strategy="X",
+        allowed_sources=(),
+        prohibited_sources=(),
+        canonical_vehicle_key="BYD|ATTO 2|PHEV",
+        message="",
+    )
+    manufacturer = RecordingManufacturerAcquisition()
+    cached_router = ProviderAcquisitionRouter(
+        arval_connector=Connector(),
+        ayvens_connector=Connector(),
+        manufacturer_equipment=manufacturer,
+    )
+    cached_router.planner = FixedPlanner((equipment_a, equipment_b))
+    cached_result = cached_router.execute(object(), left, right)
+
+    assert len(manufacturer.calls) == 1
+    assert len(cached_result.execution.candidates) == 2
+    assert all(
+        candidate.status == "UNRESOLVED"
+        for candidate in cached_result.execution.candidates
+    )
+
+    # A new execute call intentionally starts a fresh cache so live evidence
+    # is never retained across comparisons.
+    cached_router.execute(object(), left, right)
+    assert len(manufacturer.calls) == 2
+
+    print(
+        "TEST 4 PASSED - DUPLICATE EQUIPMENT ACTIONS SHARE ONE "
+        "MANUFACTURER DISCOVERY ONLY WITHIN A SINGLE EXECUTION"
     )
 
     print(
